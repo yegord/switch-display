@@ -1,3 +1,4 @@
+#[derive(Debug)]
 pub(crate) struct Screen {
     pub(crate) outputs: Vec<Output>,
 }
