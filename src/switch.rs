@@ -8,18 +8,20 @@ pub(crate) struct SwitchPlan<'a> {
 }
 
 pub(crate) fn build_switch_plan<'a>(screen: &'a Screen) -> SwitchPlan<'a> {
-    if screen.outputs.iter().any(|output| {
-        output.location == Location::Internal && output.connected && output.mode.is_some()
-    }) {
+    if screen
+        .outputs
+        .iter()
+        .any(|output| output.location == Location::Internal && output.connected && output.enabled)
+    {
         if screen.outputs.iter().any(|output| {
-            output.location == Location::External && output.connected && output.mode.is_some()
+            output.location == Location::External && output.connected && output.enabled
         }) {
             SwitchPlan {
                 outputs_to_disable: screen
                     .outputs
                     .iter()
                     .filter(|output| {
-                        output.mode.is_some()
+                        output.enabled
                             && (!output.connected || output.location == Location::Internal)
                     })
                     .collect(),
@@ -34,7 +36,7 @@ pub(crate) fn build_switch_plan<'a>(screen: &'a Screen) -> SwitchPlan<'a> {
                 outputs_to_disable: screen
                     .outputs
                     .iter()
-                    .filter(|output| output.mode.is_some() && !output.connected)
+                    .filter(|output| output.enabled && !output.connected)
                     .collect(),
                 outputs_to_enable: screen
                     .outputs
@@ -49,8 +51,7 @@ pub(crate) fn build_switch_plan<'a>(screen: &'a Screen) -> SwitchPlan<'a> {
                 .outputs
                 .iter()
                 .filter(|output| {
-                    output.mode.is_some()
-                        && (!output.connected || output.location == Location::External)
+                    output.enabled && (!output.connected || output.location == Location::External)
                 })
                 .collect(),
             outputs_to_enable: screen
@@ -80,8 +81,7 @@ pub(crate) fn choose_best_resolution(
             acc.retain(|resolution| e.contains(resolution));
             acc
         })
-        .map(|resolutions| resolutions.into_iter().max_by_key(Resolution::area))
-        .flatten()
+        .and_then(|resolutions| resolutions.into_iter().max_by_key(Resolution::area))
 }
 
 #[cfg(test)]
@@ -112,14 +112,14 @@ mod tests {
                 Output {
                     name: "eDP-1".to_string(),
                     connected: true,
-                    mode: None,
+                    enabled: false,
                     modes: vec![TEST_MODE],
                     location: Location::Internal,
                 },
                 Output {
                     name: "HDMI-1".to_string(),
                     connected: true,
-                    mode: None,
+                    enabled: false,
                     modes: vec![TEST_MODE],
                     location: Location::External,
                 },
@@ -142,28 +142,28 @@ mod tests {
                 Output {
                     name: "eDP-1".to_string(),
                     connected: true,
-                    mode: Some(TEST_MODE),
+                    enabled: true,
                     modes: vec![TEST_MODE],
                     location: Location::Internal,
                 },
                 Output {
                     name: "HDMI-1".to_string(),
                     connected: true,
-                    mode: None,
+                    enabled: false,
                     modes: vec![TEST_MODE],
                     location: Location::External,
                 },
                 Output {
                     name: "HDMI-2".to_string(),
                     connected: false,
-                    mode: Some(TEST_MODE),
+                    enabled: true,
                     modes: vec![TEST_MODE],
                     location: Location::External,
                 },
                 Output {
                     name: "DP-1".to_string(),
                     connected: false,
-                    mode: None,
+                    enabled: false,
                     modes: vec![TEST_MODE],
                     location: Location::External,
                 },
@@ -190,28 +190,28 @@ mod tests {
                 Output {
                     name: "eDP-1".to_string(),
                     connected: true,
-                    mode: Some(TEST_MODE),
+                    enabled: true,
                     modes: vec![TEST_MODE],
                     location: Location::Internal,
                 },
                 Output {
                     name: "HDMI-1".to_string(),
                     connected: true,
-                    mode: Some(TEST_MODE),
+                    enabled: true,
                     modes: vec![TEST_MODE],
                     location: Location::External,
                 },
                 Output {
                     name: "HDMI-2".to_string(),
                     connected: false,
-                    mode: Some(TEST_MODE),
+                    enabled: true,
                     modes: vec![TEST_MODE],
                     location: Location::External,
                 },
                 Output {
                     name: "DP-1".to_string(),
                     connected: false,
-                    mode: None,
+                    enabled: false,
                     modes: vec![TEST_MODE],
                     location: Location::External,
                 },
@@ -237,28 +237,28 @@ mod tests {
                 Output {
                     name: "eDP-1".to_string(),
                     connected: true,
-                    mode: None,
+                    enabled: false,
                     modes: vec![TEST_MODE],
                     location: Location::Internal,
                 },
                 Output {
                     name: "HDMI-1".to_string(),
                     connected: true,
-                    mode: Some(TEST_MODE),
+                    enabled: true,
                     modes: vec![TEST_MODE],
                     location: Location::External,
                 },
                 Output {
                     name: "HDMI-2".to_string(),
                     connected: false,
-                    mode: Some(TEST_MODE),
+                    enabled: true,
                     modes: vec![TEST_MODE],
                     location: Location::External,
                 },
                 Output {
                     name: "DP-1".to_string(),
                     connected: false,
-                    mode: None,
+                    enabled: false,
                     modes: vec![TEST_MODE],
                     location: Location::External,
                 },
@@ -294,7 +294,7 @@ mod tests {
         let outputs = [&Output {
             name: "eDP-1".to_string(),
             connected: true,
-            mode: None,
+            enabled: false,
             modes: vec![
                 Mode {
                     resolution: Resolution {
@@ -330,56 +330,59 @@ mod tests {
     #[test]
     fn best_resolution_for_two_outputs() {
         // Arrange
-        let outputs = [&Output {
-            name: "eDP-1".to_string(),
-            connected: true,
-            mode: None,
-            modes: vec![
-                Mode {
-                    resolution: Resolution {
-                        width: 1920,
-                        height: 1080,
+        let outputs = [
+            &Output {
+                name: "eDP-1".to_string(),
+                connected: true,
+                enabled: false,
+                modes: vec![
+                    Mode {
+                        resolution: Resolution {
+                            width: 1920,
+                            height: 1080,
+                        },
+                        freq: 60000,
                     },
-                    freq: 60000,
-                },
-                Mode {
-                    resolution: Resolution {
-                        width: 800,
-                        height: 600,
+                    Mode {
+                        resolution: Resolution {
+                            width: 800,
+                            height: 600,
+                        },
+                        freq: 60000,
                     },
-                    freq: 60000,
-                },
-                Mode {
-                    resolution: Resolution {
-                        width: 640,
-                        height: 480,
+                    Mode {
+                        resolution: Resolution {
+                            width: 640,
+                            height: 480,
+                        },
+                        freq: 60000,
                     },
-                    freq: 60000,
-                },
-            ],
-            location: Location::Internal,
-        }, &Output {
-            name: "HDMI-1".to_string(),
-            connected: true,
-            mode: None,
-            modes: vec![
-                Mode {
-                    resolution: Resolution {
-                        width: 800,
-                        height: 600,
+                ],
+                location: Location::Internal,
+            },
+            &Output {
+                name: "HDMI-1".to_string(),
+                connected: true,
+                enabled: false,
+                modes: vec![
+                    Mode {
+                        resolution: Resolution {
+                            width: 800,
+                            height: 600,
+                        },
+                        freq: 30000,
                     },
-                    freq: 30000,
-                },
-                Mode {
-                    resolution: Resolution {
-                        width: 640,
-                        height: 480,
+                    Mode {
+                        resolution: Resolution {
+                            width: 640,
+                            height: 480,
+                        },
+                        freq: 60000,
                     },
-                    freq: 60000,
-                },
-            ],
-            location: Location::Internal,
-        }];
+                ],
+                location: Location::Internal,
+            },
+        ];
 
         // Act
         let best_resolution = choose_best_resolution(&outputs, None);
@@ -397,56 +400,59 @@ mod tests {
     #[test]
     fn best_resolution_for_two_outputs_with_min_freq() {
         // Arrange
-        let outputs = [&Output {
-            name: "eDP-1".to_string(),
-            connected: true,
-            mode: None,
-            modes: vec![
-                Mode {
-                    resolution: Resolution {
-                        width: 1920,
-                        height: 1080,
+        let outputs = [
+            &Output {
+                name: "eDP-1".to_string(),
+                connected: true,
+                enabled: false,
+                modes: vec![
+                    Mode {
+                        resolution: Resolution {
+                            width: 1920,
+                            height: 1080,
+                        },
+                        freq: 60000,
                     },
-                    freq: 60000,
-                },
-                Mode {
-                    resolution: Resolution {
-                        width: 800,
-                        height: 600,
+                    Mode {
+                        resolution: Resolution {
+                            width: 800,
+                            height: 600,
+                        },
+                        freq: 60000,
                     },
-                    freq: 60000,
-                },
-                Mode {
-                    resolution: Resolution {
-                        width: 640,
-                        height: 480,
+                    Mode {
+                        resolution: Resolution {
+                            width: 640,
+                            height: 480,
+                        },
+                        freq: 60000,
                     },
-                    freq: 60000,
-                },
-            ],
-            location: Location::Internal,
-        }, &Output {
-            name: "HDMI-1".to_string(),
-            connected: true,
-            mode: None,
-            modes: vec![
-                Mode {
-                    resolution: Resolution {
-                        width: 800,
-                        height: 600,
+                ],
+                location: Location::Internal,
+            },
+            &Output {
+                name: "HDMI-1".to_string(),
+                connected: true,
+                enabled: false,
+                modes: vec![
+                    Mode {
+                        resolution: Resolution {
+                            width: 800,
+                            height: 600,
+                        },
+                        freq: 30000,
                     },
-                    freq: 30000,
-                },
-                Mode {
-                    resolution: Resolution {
-                        width: 640,
-                        height: 480,
+                    Mode {
+                        resolution: Resolution {
+                            width: 640,
+                            height: 480,
+                        },
+                        freq: 60000,
                     },
-                    freq: 60000,
-                },
-            ],
-            location: Location::Internal,
-        }];
+                ],
+                location: Location::Internal,
+            },
+        ];
 
         // Act
         let best_resolution = choose_best_resolution(&outputs, Some(50000));
@@ -464,35 +470,34 @@ mod tests {
     #[test]
     fn no_common_resolution() {
         // Arrange
-        let outputs = [&Output {
-            name: "eDP-1".to_string(),
-            connected: true,
-            mode: None,
-            modes: vec![
-                Mode {
+        let outputs = [
+            &Output {
+                name: "eDP-1".to_string(),
+                connected: true,
+                enabled: false,
+                modes: vec![Mode {
                     resolution: Resolution {
                         width: 1920,
                         height: 1080,
                     },
                     freq: 60000,
-                },
-            ],
-            location: Location::Internal,
-        }, &Output {
-            name: "HDMI-1".to_string(),
-            connected: true,
-            mode: None,
-            modes: vec![
-                Mode {
+                }],
+                location: Location::Internal,
+            },
+            &Output {
+                name: "HDMI-1".to_string(),
+                connected: true,
+                enabled: false,
+                modes: vec![Mode {
                     resolution: Resolution {
                         width: 800,
                         height: 600,
                     },
                     freq: 60000,
-                },
-            ],
-            location: Location::Internal,
-        }];
+                }],
+                location: Location::Internal,
+            },
+        ];
 
         // Act
         let best_resolution = choose_best_resolution(&outputs, None);
