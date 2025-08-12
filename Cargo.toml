@@ -3,5 +3,10 @@ name = "x-switch-display"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+default = ["xrandr", "sway"]
+xrandr = ["dep:regex"]
+sway = []
+
 [dependencies]
-regex = { version = "1.11.1", default-features = false, features = ["unicode-perl"] }
+regex = { version = "1.11.1", default-features = false, features = ["unicode-perl"], optional = true }

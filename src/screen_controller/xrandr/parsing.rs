@@ -375,4 +375,3 @@ HDMI-2 connected (normal left inverted right x axis y axis)
    640x480       60.00    59.94  
 "#;
 }
-
