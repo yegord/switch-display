@@ -15,7 +15,7 @@ impl Xrandr {
     }
 
     fn output(mut self, output_name: &str) -> Self {
-        self.command.arg("--output").arg(&output_name);
+        self.command.arg("--output").arg(output_name);
         self
     }
 
@@ -31,7 +31,7 @@ impl Xrandr {
     }
 
     fn same_as(mut self, output_name: &str) -> Self {
-        self.command.arg("--same-as").arg(&output_name);
+        self.command.arg("--same-as").arg(output_name);
         self
     }
 
