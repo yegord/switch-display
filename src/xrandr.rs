@@ -78,20 +78,66 @@ impl Parser {
     }
 }
 
+struct Xrandr {
+    command: Command,
+}
+
+impl Xrandr {
+    fn new() -> Self {
+        let command = Command::new("xrandr");
+        Self { command }
+    }
+
+    fn output(&mut self, output_name: &str) -> &mut Self {
+        self.command.arg("--output").arg(output_name);
+        self
+    }
+
+    fn resolution(&mut self, resolution: Option<Resolution>) -> &mut Self {
+        if let Some(resolution) = resolution {
+            self.command.arg("--mode").arg(format!("{}x{}", resolution.width, resolution.height));
+        } else {
+            self.command.arg("--auto");
+        }
+        self
+    }
+
+    fn same_as(&mut self, same_as: Option<&Output>) -> &mut Self {
+        if let Some(output) = same_as {
+            self.command.arg("--same-as").arg(&output.name);
+        }
+        self
+    }
+
+    fn off(&mut self) -> &mut Self {
+        self.command.arg("--off");
+        self
+    }
+
+    fn run(&mut self) -> String {
+        let status = self.command.output().expect("xrandr failed to start");
+
+        assert!(
+            status.status.success(),
+            "xrandr exited with status={:?}, stderr={}",
+            status.status,
+            String::from_utf8_lossy(&status.stderr)
+        );
+
+        String::from_utf8(status.stdout).expect("xrandr output is invalid utf-8")
+    }
+}
+
 pub(crate) fn query_xrandr() -> Screen {
-    let status = Command::new("xrandr")
-        .output()
-        .expect("xrandr failed to start");
-    assert!(
-        status.status.success(),
-        "xrandr exited with status={:?}, stderr={}",
-        status.status,
-        String::from_utf8_lossy(&status.stderr)
-    );
+    Parser::new().parse(&Xrandr::new().run())
+}
 
-    let xrandr_output = String::from_utf8(status.stdout).expect("xrandr output is invalid utf-8");
+pub(crate) fn enable_output(output: &Output, resolution: Option<Resolution>, same_as: Option<&Output>) {
+    Xrandr::new().output(&output.name).resolution(resolution).same_as(same_as).run();
+}
 
-    Parser::new().parse(&xrandr_output)
+pub(crate) fn disable_output(output: &Output) {
+    Xrandr::new().output(&output.name).off().run();
 }
 
 #[cfg(test)]

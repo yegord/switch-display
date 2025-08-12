@@ -2,6 +2,7 @@ use crate::screen::{Location, Output, Resolution, Screen};
 use std::collections::HashSet;
 use std::iter::Iterator;
 
+#[derive(Debug)]
 pub(crate) struct SwitchPlan<'a> {
     pub(crate) outputs_to_disable: Vec<&'a Output>,
     pub(crate) outputs_to_enable: Vec<&'a Output>,
