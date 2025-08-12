@@ -8,7 +8,7 @@ pub(crate) struct SwitchPlan<'a> {
     pub(crate) outputs_to_enable: Vec<&'a Output>,
 }
 
-pub(crate) fn build_switch_plan<'a>(screen: &'a Screen) -> SwitchPlan<'a> {
+pub(super) fn build_switch_plan<'a>(screen: &'a Screen) -> SwitchPlan<'a> {
     if screen
         .outputs
         .iter()
@@ -64,7 +64,7 @@ pub(crate) fn build_switch_plan<'a>(screen: &'a Screen) -> SwitchPlan<'a> {
     }
 }
 
-pub(crate) fn choose_best_resolution(
+pub(super) fn choose_best_resolution(
     outputs: &[&Output],
     min_freq: Option<i32>,
 ) -> Option<Resolution> {
