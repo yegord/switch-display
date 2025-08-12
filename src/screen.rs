@@ -11,7 +11,7 @@ pub(crate) struct Output {
     pub(crate) location: Location,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub(crate) struct Mode {
     pub(crate) resolution: Resolution,
     pub(crate) freq: i32,
