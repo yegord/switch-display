@@ -3,4 +3,6 @@ mod screen;
 mod switch;
 mod xrandr;
 
-fn main() {}
+fn main() {
+    println!("{:?}", xrandr::query_xrandr());
+}

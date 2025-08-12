@@ -1,5 +1,6 @@
 use crate::screen::{Location, Mode, Output, Resolution, Screen};
 use regex::Regex;
+use std::process::Command;
 
 struct Parser {
     output_line_regex: Regex,
@@ -75,6 +76,22 @@ impl Parser {
 
         Screen { outputs }
     }
+}
+
+pub(crate) fn query_xrandr() -> Screen {
+    let status = Command::new("xrandr")
+        .output()
+        .expect("xrandr failed to start");
+    assert!(
+        status.status.success(),
+        "xrandr exited with status={:?}, stderr={}",
+        status.status,
+        String::from_utf8_lossy(&status.stderr)
+    );
+
+    let xrandr_output = String::from_utf8(status.stdout).expect("xrandr output is invalid utf-8");
+
+    Parser::new().parse(&xrandr_output)
 }
 
 #[cfg(test)]
