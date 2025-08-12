@@ -1,42 +1,80 @@
-use crate::screen::{Location, Output, Screen};
+use crate::screen::{Location, Mode, Output, Resolution, Screen};
+use regex::Regex;
 
-fn parse_output_line(line: &str) -> Option<Output> {
-    if line.contains("connected") {
-        let name = line
-            .split_ascii_whitespace()
-            .next()
-            .expect("expected output name here");
-
-        Some(Output {
-            name: name.to_string(),
-            connected: !line.contains("disconnected"),
-            enabled: false,
-            modes: Vec::new(),
-            location: Location::from_output_name(name),
-        })
-    } else {
-        None
-    }
+struct Parser {
+    output_line_regex: Regex,
+    mode_line_regex: Regex,
+    freqs_regex: Regex,
 }
 
-fn parse_output(xrandr_output: &str) -> Screen {
-    let mut outputs = Vec::new();
-    let mut current_output: Option<Output> = None;
-
-    for line in xrandr_output.lines() {
-        if let Some(output) = parse_output_line(line) {
-            if let Some(output) = current_output {
-                outputs.push(output);
-            }
-            current_output = Some(output);
+impl Parser {
+    fn new() -> Self {
+        Self {
+            output_line_regex: Regex::new(r"^(?P<name>\S+)\s+(?P<status>connected|disconnected)")
+                .expect("bad output_line_regex"),
+            mode_line_regex: Regex::new(r"^\s+(?P<width>\d+)x(?P<height>\d+)\s+(?P<freqs>.*)$")
+                .expect("bad mode_line_regex"),
+            freqs_regex: Regex::new(r"(?P<x>\d+)\.(?P<y>\d+)(?P<flags>\*?\+?)")
+                .expect("bad freqs_regex"),
         }
     }
 
-    if let Some(output) = current_output {
-        outputs.push(output);
+    fn parse_output_line(&self, line: &str) -> Option<Output> {
+        self.output_line_regex.captures(line).map(|caps| Output {
+            name: caps["name"].to_string(),
+            connected: &caps["status"] == "connected",
+            enabled: false,
+            modes: Vec::new(),
+            location: Location::from_output_name(&caps["name"]),
+        })
     }
 
-    Screen { outputs }
+    fn parse_mode_line(&self, line: &str, output: &mut Output) {
+        let Some(caps) = self.mode_line_regex.captures(line) else {
+            return;
+        };
+
+        let resolution = Resolution {
+            width: caps["width"].parse().expect("bad width"),
+            height: caps["height"].parse().expect("bad height"),
+        };
+
+        for caps in self.freqs_regex.captures_iter(&caps["freqs"]) {
+            let x: i32 = caps["x"].parse().expect("bad integer part");
+            let y: i32 = caps["y"].parse().expect("bad fractional part");
+            assert!(y < 100);
+            let freq = x * 1000 + y * 10;
+
+            output.modes.push(Mode { resolution, freq });
+
+            if caps["flags"].contains('*') {
+                assert!(!output.enabled);
+                output.enabled = true;
+            }
+        }
+    }
+
+    fn parse(&self, xrandr_output: &str) -> Screen {
+        let mut outputs = Vec::new();
+        let mut current_output: Option<Output> = None;
+
+        for line in xrandr_output.lines() {
+            if let Some(output) = self.parse_output_line(line) {
+                if let Some(output) = current_output {
+                    outputs.push(output);
+                }
+                current_output = Some(output);
+            } else if let Some(output) = current_output.as_mut() {
+                self.parse_mode_line(line, output);
+            }
+        }
+
+        if let Some(output) = current_output {
+            outputs.push(output);
+        }
+
+        Screen { outputs }
+    }
 }
 
 #[cfg(test)]
@@ -45,17 +83,19 @@ mod test {
 
     #[test]
     fn parse_output_line_must_fail() {
-        assert!(parse_output_line(SCREEN_LINE).is_none());
-        assert!(parse_output_line(ACTIVE_MODE_LINE).is_none());
-        assert!(parse_output_line(INACTIVE_MODE_LINE).is_none());
+        let parser = Parser::new();
+        assert!(parser.parse_output_line(SCREEN_LINE).is_none());
+        assert!(parser.parse_output_line(ACTIVE_MODE_LINE).is_none());
+        assert!(parser.parse_output_line(INACTIVE_MODE_LINE).is_none());
     }
 
     #[test]
     fn parse_output_line_must_succeed_on_connected_internal_output_line() {
         // Arrange
+        let parser = Parser::new();
 
         // Act
-        let output = parse_output_line(CONNECTED_INTERNAL_OUTPUT_LINE);
+        let output = parser.parse_output_line(CONNECTED_INTERNAL_OUTPUT_LINE);
 
         // Assert
         let Some(output) = output else {
@@ -69,9 +109,10 @@ mod test {
     #[test]
     fn parse_output_line_must_succeed_on_connected_external_output_line() {
         // Arrange
+        let parser = Parser::new();
 
         // Act
-        let output = parse_output_line(CONNECTED_EXTERNAL_OUTPUT_LINE);
+        let output = parser.parse_output_line(CONNECTED_EXTERNAL_OUTPUT_LINE);
 
         // Assert
         let Some(output) = output else {
@@ -85,9 +126,10 @@ mod test {
     #[test]
     fn parse_output_line_must_succeed_on_disconnected_output_line() {
         // Arrange
+        let parser = Parser::new();
 
         // Act
-        let output = parse_output_line(DISCONNECTED_OUTPUT_LINE);
+        let output = parser.parse_output_line(DISCONNECTED_OUTPUT_LINE);
 
         // Assert
         let Some(output) = output else {
@@ -99,14 +141,162 @@ mod test {
     }
 
     #[test]
-    fn test_parse_output() {
+    fn parse_mode_line_must_fail() {
         // Arrange
+        let mut output = Output {
+            name: "eDP-1".to_string(),
+            connected: true,
+            enabled: false,
+            modes: Vec::new(),
+            location: Location::Internal,
+        };
+        let parser = Parser::new();
 
         // Act
-        let screen = parse_output(TEST_OUTPUT);
+        parser.parse_mode_line(SCREEN_LINE, &mut output);
+        parser.parse_mode_line(CONNECTED_INTERNAL_OUTPUT_LINE, &mut output);
+        parser.parse_mode_line(CONNECTED_EXTERNAL_OUTPUT_LINE, &mut output);
+        parser.parse_mode_line(DISCONNECTED_OUTPUT_LINE, &mut output);
+
+        // Assert
+        assert!(!output.enabled);
+        assert!(output.modes.is_empty());
+    }
+
+    #[test]
+    fn parse_mode_line_must_add_active_modes_and_set_enabled() {
+        // Arrange
+        let mut output = Output {
+            name: "eDP-1".to_string(),
+            connected: true,
+            enabled: false,
+            modes: Vec::new(),
+            location: Location::Internal,
+        };
+        let parser = Parser::new();
+
+        // Act
+        parser.parse_mode_line(ACTIVE_MODE_LINE, &mut output);
+
+        // Assert
+        assert!(output.enabled);
+        assert_eq!(
+            output.modes,
+            [
+                Mode {
+                    resolution: Resolution {
+                        width: 1920,
+                        height: 1080
+                    },
+                    freq: 60020,
+                },
+                Mode {
+                    resolution: Resolution {
+                        width: 1920,
+                        height: 1080
+                    },
+                    freq: 60010,
+                },
+                Mode {
+                    resolution: Resolution {
+                        width: 1920,
+                        height: 1080
+                    },
+                    freq: 59970,
+                },
+                Mode {
+                    resolution: Resolution {
+                        width: 1920,
+                        height: 1080
+                    },
+                    freq: 59960,
+                },
+                Mode {
+                    resolution: Resolution {
+                        width: 1920,
+                        height: 1080
+                    },
+                    freq: 59930,
+                },
+                Mode {
+                    resolution: Resolution {
+                        width: 1920,
+                        height: 1080
+                    },
+                    freq: 48020,
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn parse_mode_line_must_add_inactive_modes_and_not_set_enabled() {
+        // Arrange
+        let mut output = Output {
+            name: "eDP-1".to_string(),
+            connected: true,
+            enabled: false,
+            modes: Vec::new(),
+            location: Location::Internal,
+        };
+        let parser = Parser::new();
+
+        // Act
+        parser.parse_mode_line(INACTIVE_MODE_LINE, &mut output);
+
+        // Assert
+        assert!(!output.enabled);
+        assert_eq!(
+            output.modes,
+            [
+                Mode {
+                    resolution: Resolution {
+                        width: 1680,
+                        height: 1050
+                    },
+                    freq: 59950,
+                },
+                Mode {
+                    resolution: Resolution {
+                        width: 1680,
+                        height: 1050
+                    },
+                    freq: 59880,
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn test_parse_output() {
+        // Arrange
+        let parser = Parser::new();
+
+        // Act
+        let screen = parser.parse(TEST_OUTPUT);
 
         // Assert
         assert_eq!(screen.outputs.len(), 5);
+        assert_eq!(screen.outputs[0].name, "eDP-1");
+        assert!(screen.outputs[0].connected);
+        assert!(screen.outputs[0].enabled);
+        assert_eq!(screen.outputs[0].modes.len(), 83);
+        assert_eq!(screen.outputs[1].name, "DP-1");
+        assert!(!screen.outputs[1].connected);
+        assert!(!screen.outputs[1].enabled);
+        assert!(screen.outputs[1].modes.is_empty());
+        assert_eq!(screen.outputs[2].name, "HDMI-1");
+        assert!(!screen.outputs[2].connected);
+        assert!(!screen.outputs[2].enabled);
+        assert!(screen.outputs[2].modes.is_empty());
+        assert_eq!(screen.outputs[3].name, "DP-2");
+        assert!(!screen.outputs[3].connected);
+        assert!(!screen.outputs[3].enabled);
+        assert!(screen.outputs[3].modes.is_empty());
+        assert_eq!(screen.outputs[4].name, "HDMI-2");
+        assert!(screen.outputs[4].connected);
+        assert!(!screen.outputs[4].enabled);
+        assert_eq!(screen.outputs[4].modes.len(), 30);
     }
 
     const SCREEN_LINE: &str =
