@@ -6,7 +6,7 @@ pub(crate) struct Screen {
 pub(crate) struct Output {
     pub(crate) name: String,
     pub(crate) connected: bool,
-    pub(crate) mode: Option<Mode>,
+    pub(crate) enabled: bool,
     pub(crate) modes: Vec<Mode>,
     pub(crate) location: Location,
 }
@@ -25,7 +25,9 @@ pub(crate) struct Resolution {
 
 impl Resolution {
     pub(crate) fn area(&self) -> i32 {
-        self.width.checked_mul(self.height).expect("area should normally fit into i32")
+        self.width
+            .checked_mul(self.height)
+            .expect("area should normally fit into i32")
     }
 }
 
@@ -35,13 +37,15 @@ pub(crate) enum Location {
     External,
 }
 
-pub(crate) fn get_location(name: &str) -> Location {
-    if name.starts_with("eDP-") || name.starts_with("LVDS-") {
-        Location::Internal
-    } else if name.starts_with("HDMI-") || name.starts_with("DP-") {
-        Location::External
-    } else {
-        unreachable!("FIXME: unknown output connection location: {}", name);
+impl Location {
+    pub(crate) fn from_output_name(name: &str) -> Location {
+        if name.starts_with("eDP-") || name.starts_with("LVDS-") {
+            Location::Internal
+        } else if name.starts_with("HDMI-") || name.starts_with("DP-") {
+            Location::External
+        } else {
+            unreachable!("FIXME: unknown output connection location: {}", name);
+        }
     }
 }
 
@@ -50,12 +54,12 @@ mod tests {
     use super::*;
 
     #[test]
-    fn get_location_test() {
-        assert_eq!(get_location("eDP-1"), Location::Internal);
-        assert_eq!(get_location("LVDS-1"), Location::Internal);
-        assert_eq!(get_location("HDMI-1"), Location::External);
-        assert_eq!(get_location("HDMI-2"), Location::External);
-        assert_eq!(get_location("DP-1"), Location::External);
-        assert_eq!(get_location("DP-2"), Location::External);
+    fn test_location_from_output_name() {
+        assert_eq!(Location::from_output_name("eDP-1"), Location::Internal);
+        assert_eq!(Location::from_output_name("LVDS-1"), Location::Internal);
+        assert_eq!(Location::from_output_name("HDMI-1"), Location::External);
+        assert_eq!(Location::from_output_name("HDMI-2"), Location::External);
+        assert_eq!(Location::from_output_name("DP-1"), Location::External);
+        assert_eq!(Location::from_output_name("DP-2"), Location::External);
     }
 }
