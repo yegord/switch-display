@@ -18,5 +18,5 @@ fn main() {
     let best_resolution = switch::choose_best_resolution(&switch_plan.outputs_to_enable, None);
     println!("best_resolution = {:?}", best_resolution);
 
-    controller.apply(&switch_plan, best_resolution)
+    controller.switch_outputs(&switch_plan, best_resolution)
 }

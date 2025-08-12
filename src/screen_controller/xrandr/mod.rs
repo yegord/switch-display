@@ -45,13 +45,13 @@ impl Xrandr {
     }
 }
 
-pub(crate) fn get_outputs() -> Screen {
+pub(super) fn get_outputs() -> Screen {
     let status = run(Xrandr::new().command());
     let xrandr_output = String::from_utf8(status.stdout).expect("xrandr output is invalid utf-8");
     parsing::parse(&xrandr_output)
 }
 
-fn make_apply_commands(
+fn build_switch_commands(
     switch_plan: &SwitchPlan,
     resolution: Option<Resolution>,
 ) -> Vec<process::Command> {
@@ -75,13 +75,15 @@ fn make_apply_commands(
             });
 
             std::iter::once(first_command).chain(other_commands)
-        }).into_iter().flatten();
+        })
+        .into_iter()
+        .flatten();
 
     disable_commands.chain(enable_commands).collect()
 }
 
-pub(crate) fn apply(switch_plan: &SwitchPlan, resolution: Option<Resolution>) {
-    for command in make_apply_commands(switch_plan, resolution) {
+pub(super) fn switch_outputs(switch_plan: &SwitchPlan, resolution: Option<Resolution>) {
+    for command in build_switch_commands(switch_plan, resolution) {
         run(command);
     }
 }
@@ -101,4 +103,139 @@ fn run(mut command: process::Command) -> process::Output {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use crate::screen::{Location, Output};
+
+    #[test]
+    fn test_make_switch_commands_without_resolution() {
+        // Arrange
+        let outputs = [
+            Output {
+                name: "eDP-1".to_string(),
+                connected: true,
+                enabled: true,
+                modes: Vec::new(),
+                location: Location::Internal,
+            },
+            Output {
+                name: "HDMI-1".to_string(),
+                connected: true,
+                enabled: false,
+                modes: Vec::new(),
+                location: Location::External,
+            },
+            Output {
+                name: "HDMI-2".to_string(),
+                connected: false,
+                enabled: true,
+                modes: Vec::new(),
+                location: Location::External,
+            },
+        ];
+
+        let switch_plan = SwitchPlan {
+            outputs_to_disable: vec![&outputs[2]],
+            outputs_to_enable: vec![&outputs[0], &outputs[1]],
+        };
+
+        let resolution = None;
+
+        // Act
+        let commands = build_switch_commands(&switch_plan, resolution);
+
+        // Assert
+        assert!(commands.len() == 3);
+        assert_command_eq(&commands[0], "xrandr", &["--output", "HDMI-2", "--off"]);
+        assert_command_eq(&commands[1], "xrandr", &["--output", "eDP-1", "--auto"]);
+        assert_command_eq(
+            &commands[2],
+            "xrandr",
+            &["--output", "HDMI-1", "--auto", "--same-as", "eDP-1"],
+        );
+    }
+
+    #[test]
+    fn test_make_switch_commands_with_resolution() {
+        // Arrange
+        let outputs = [
+            Output {
+                name: "eDP-1".to_string(),
+                connected: true,
+                enabled: true,
+                modes: Vec::new(),
+                location: Location::Internal,
+            },
+            Output {
+                name: "HDMI-1".to_string(),
+                connected: true,
+                enabled: false,
+                modes: Vec::new(),
+                location: Location::External,
+            },
+            Output {
+                name: "HDMI-2".to_string(),
+                connected: false,
+                enabled: true,
+                modes: Vec::new(),
+                location: Location::External,
+            },
+        ];
+
+        let switch_plan = SwitchPlan {
+            outputs_to_disable: vec![&outputs[2]],
+            outputs_to_enable: vec![&outputs[0], &outputs[1]],
+        };
+
+        let resolution = Some(Resolution {
+            width: 1920,
+            height: 1080,
+        });
+
+        // Act
+        let commands = build_switch_commands(&switch_plan, resolution);
+
+        // Assert
+        assert!(commands.len() == 3);
+        assert_command_eq(&commands[0], "xrandr", &["--output", "HDMI-2", "--off"]);
+        assert_command_eq(
+            &commands[1],
+            "xrandr",
+            &["--output", "eDP-1", "--mode", "1920x1080"],
+        );
+        assert_command_eq(
+            &commands[2],
+            "xrandr",
+            &[
+                "--output",
+                "HDMI-1",
+                "--mode",
+                "1920x1080",
+                "--same-as",
+                "eDP-1",
+            ],
+        );
+    }
+
+    fn assert_command_eq(
+        actual: &std::process::Command,
+        expected_program: &str,
+        expected_args: &[&str],
+    ) {
+        // Проверка программы
+        assert_eq!(
+            actual
+                .get_program()
+                .to_str()
+                .expect("program name is not valid utf-8"),
+            expected_program
+        );
+
+        // Проверка аргументов
+        let actual_args: Vec<&str> = actual
+            .get_args()
+            .map(|arg| arg.to_str().expect("argument is not valid utf-8"))
+            .collect();
+
+        assert_eq!(actual_args, expected_args);
+    }
 }
