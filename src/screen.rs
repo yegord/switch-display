@@ -45,7 +45,7 @@ impl Location {
         } else if name.starts_with("HDMI-") || name.starts_with("DP-") {
             Location::External
         } else {
-            unreachable!("FIXME: unknown output connection location: {}", name);
+            unreachable!("FIXME: output with unknown location: {}", name);
         }
     }
 }
