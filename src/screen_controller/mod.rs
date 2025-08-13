@@ -3,6 +3,7 @@ use crate::switch::SwitchPlan;
 
 #[cfg(feature = "sway")]
 mod sway;
+mod utils;
 #[cfg(feature = "xrandr")]
 mod xrandr;
 

@@ -45,7 +45,10 @@ impl Parser {
             assert!(y < 100);
             let refresh_rate = x * 1000 + y * 10;
 
-            output.modes.push(Mode { resolution, refresh_rate });
+            output.modes.push(Mode {
+                resolution,
+                refresh_rate,
+            });
 
             if caps["flags"].contains('*') {
                 assert!(!output.enabled);

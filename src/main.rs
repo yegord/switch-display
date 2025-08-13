@@ -1,5 +1,4 @@
 #[forbid(unsafe_code)]
-
 use clap::Parser;
 
 mod screen;
@@ -46,8 +45,10 @@ fn main() {
             .collect::<Vec<_>>()
     );
 
-    let best_resolution = switch::choose_best_resolution(&switch_plan.outputs_to_enable, args.min_refresh_rate);
+    let best_resolution =
+        switch::choose_best_resolution(&switch_plan.outputs_to_enable, args.min_refresh_rate);
     log::debug!("best_resolution = {best_resolution:?}");
 
-    args.controller.switch_outputs(&switch_plan, best_resolution)
+    args.controller
+        .switch_outputs(&switch_plan, best_resolution)
 }
