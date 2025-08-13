@@ -19,16 +19,17 @@ struct Args {
 }
 
 fn main() {
-    // TODO: logging
+    env_logger::init();
+
     let args = Args::parse();
 
     let screen = args.controller.get_outputs();
-    println!("screen = {screen:?}");
+    log::trace!("screen = {screen:?}");
 
     let switch_plan = switch::build_switch_plan(&screen);
-    println!("switch_plan = {switch_plan:?}");
+    log::trace!("switch_plan = {switch_plan:?}");
 
-    println!(
+    log::debug!(
         "outputs_to_disable = {:?}",
         switch_plan
             .outputs_to_disable
@@ -36,7 +37,7 @@ fn main() {
             .map(|output| output.name.as_str())
             .collect::<Vec<_>>()
     );
-    println!(
+    log::debug!(
         "outputs_to_enable = {:?}",
         switch_plan
             .outputs_to_enable
@@ -46,7 +47,7 @@ fn main() {
     );
 
     let best_resolution = switch::choose_best_resolution(&switch_plan.outputs_to_enable, args.min_refresh_rate);
-    println!("best_resolution = {best_resolution:?}");
+    log::debug!("best_resolution = {best_resolution:?}");
 
     args.controller.switch_outputs(&switch_plan, best_resolution)
 }
