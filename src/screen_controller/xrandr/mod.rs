@@ -89,7 +89,10 @@ pub(super) fn switch_outputs(switch_plan: &SwitchPlan, resolution: Option<Resolu
 }
 
 fn run(mut command: process::Command) -> process::Output {
+    log::debug!("Running {command:?}");
     let output = command.output().expect("failed to start");
+
+    log::debug!("Output: {output:?}");
 
     assert!(
         output.status.success(),
