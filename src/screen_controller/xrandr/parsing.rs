@@ -43,9 +43,9 @@ impl Parser {
             let x: i32 = caps["x"].parse().expect("bad integer part");
             let y: i32 = caps["y"].parse().expect("bad fractional part");
             assert!(y < 100);
-            let freq = x * 1000 + y * 10;
+            let refresh_rate = x * 1000 + y * 10;
 
-            output.modes.push(Mode { resolution, freq });
+            output.modes.push(Mode { resolution, refresh_rate });
 
             if caps["flags"].contains('*') {
                 assert!(!output.enabled);
@@ -192,42 +192,42 @@ mod test {
                         width: 1920,
                         height: 1080
                     },
-                    freq: 60020,
+                    refresh_rate: 60020,
                 },
                 Mode {
                     resolution: Resolution {
                         width: 1920,
                         height: 1080
                     },
-                    freq: 60010,
+                    refresh_rate: 60010,
                 },
                 Mode {
                     resolution: Resolution {
                         width: 1920,
                         height: 1080
                     },
-                    freq: 59970,
+                    refresh_rate: 59970,
                 },
                 Mode {
                     resolution: Resolution {
                         width: 1920,
                         height: 1080
                     },
-                    freq: 59960,
+                    refresh_rate: 59960,
                 },
                 Mode {
                     resolution: Resolution {
                         width: 1920,
                         height: 1080
                     },
-                    freq: 59930,
+                    refresh_rate: 59930,
                 },
                 Mode {
                     resolution: Resolution {
                         width: 1920,
                         height: 1080
                     },
-                    freq: 48020,
+                    refresh_rate: 48020,
                 },
             ]
         );
@@ -258,14 +258,14 @@ mod test {
                         width: 1680,
                         height: 1050
                     },
-                    freq: 59950,
+                    refresh_rate: 59950,
                 },
                 Mode {
                     resolution: Resolution {
                         width: 1680,
                         height: 1050
                     },
-                    freq: 59880,
+                    refresh_rate: 59880,
                 },
             ]
         );

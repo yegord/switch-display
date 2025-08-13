@@ -66,7 +66,7 @@ pub(super) fn build_switch_plan<'a>(screen: &'a Screen) -> SwitchPlan<'a> {
 
 pub(super) fn choose_best_resolution(
     outputs: &[&Output],
-    min_freq: Option<i32>,
+    min_refresh_rate: Option<i32>,
 ) -> Option<Resolution> {
     outputs
         .iter()
@@ -74,7 +74,10 @@ pub(super) fn choose_best_resolution(
             output
                 .modes
                 .iter()
-                .filter(|mode| min_freq.is_none_or(|min_freq| mode.freq >= min_freq))
+                .filter(|mode| {
+                    min_refresh_rate
+                        .is_none_or(|min_refresh_rate| mode.refresh_rate >= min_refresh_rate)
+                })
                 .map(|mode| mode.resolution)
                 .collect::<HashSet<_>>()
         })
@@ -302,14 +305,14 @@ mod tests {
                         width: 1920,
                         height: 1080,
                     },
-                    freq: 60000,
+                    refresh_rate: 60000,
                 },
                 Mode {
                     resolution: Resolution {
                         width: 640,
                         height: 480,
                     },
-                    freq: 60000,
+                    refresh_rate: 60000,
                 },
             ],
             location: Location::Internal,
@@ -342,21 +345,21 @@ mod tests {
                             width: 1920,
                             height: 1080,
                         },
-                        freq: 60000,
+                        refresh_rate: 60000,
                     },
                     Mode {
                         resolution: Resolution {
                             width: 800,
                             height: 600,
                         },
-                        freq: 60000,
+                        refresh_rate: 60000,
                     },
                     Mode {
                         resolution: Resolution {
                             width: 640,
                             height: 480,
                         },
-                        freq: 60000,
+                        refresh_rate: 60000,
                     },
                 ],
                 location: Location::Internal,
@@ -371,14 +374,14 @@ mod tests {
                             width: 800,
                             height: 600,
                         },
-                        freq: 30000,
+                        refresh_rate: 30000,
                     },
                     Mode {
                         resolution: Resolution {
                             width: 640,
                             height: 480,
                         },
-                        freq: 60000,
+                        refresh_rate: 60000,
                     },
                 ],
                 location: Location::Internal,
@@ -399,7 +402,7 @@ mod tests {
     }
 
     #[test]
-    fn best_resolution_for_two_outputs_with_min_freq() {
+    fn best_resolution_for_two_outputs_with_min_refresh_rate() {
         // Arrange
         let outputs = [
             &Output {
@@ -412,21 +415,21 @@ mod tests {
                             width: 1920,
                             height: 1080,
                         },
-                        freq: 60000,
+                        refresh_rate: 60000,
                     },
                     Mode {
                         resolution: Resolution {
                             width: 800,
                             height: 600,
                         },
-                        freq: 60000,
+                        refresh_rate: 60000,
                     },
                     Mode {
                         resolution: Resolution {
                             width: 640,
                             height: 480,
                         },
-                        freq: 60000,
+                        refresh_rate: 60000,
                     },
                 ],
                 location: Location::Internal,
@@ -441,14 +444,14 @@ mod tests {
                             width: 800,
                             height: 600,
                         },
-                        freq: 30000,
+                        refresh_rate: 30000,
                     },
                     Mode {
                         resolution: Resolution {
                             width: 640,
                             height: 480,
                         },
-                        freq: 60000,
+                        refresh_rate: 60000,
                     },
                 ],
                 location: Location::Internal,
@@ -481,7 +484,7 @@ mod tests {
                         width: 1920,
                         height: 1080,
                     },
-                    freq: 60000,
+                    refresh_rate: 60000,
                 }],
                 location: Location::Internal,
             },
@@ -494,7 +497,7 @@ mod tests {
                         width: 800,
                         height: 600,
                     },
-                    freq: 60000,
+                    refresh_rate: 60000,
                 }],
                 location: Location::Internal,
             },
@@ -527,6 +530,6 @@ mod tests {
             width: 1920,
             height: 1080,
         },
-        freq: 60000,
+        refresh_rate: 60000,
     };
 }

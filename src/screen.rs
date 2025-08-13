@@ -15,7 +15,7 @@ pub(crate) struct Output {
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) struct Mode {
     pub(crate) resolution: Resolution,
-    pub(crate) freq: i32,
+    pub(crate) refresh_rate: i32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
