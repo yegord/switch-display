@@ -6,6 +6,7 @@ mod sway;
 #[cfg(feature = "xrandr")]
 mod xrandr;
 
+#[derive(Copy, Clone, Debug, clap::ValueEnum)]
 pub(super) enum ScreenController {
     #[cfg(feature = "xrandr")]
     Xrandr,

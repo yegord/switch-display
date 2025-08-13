@@ -1,7 +1,9 @@
 [package]
-name = "x-switch-display"
+name = "switch-display"
 version = "0.1.0"
 edition = "2024"
+authors = ["Yegor Derevenets <yegor.derevenets@gmail.com>"]
+description = "Toggle displays between three states: all on, only external on, only internal on"
 
 [features]
 default = ["xrandr", "sway"]
@@ -9,4 +11,5 @@ xrandr = ["dep:regex"]
 sway = []
 
 [dependencies]
+clap = { version = "4.5.45", features = ["derive"] }
 regex = { version = "1.11.1", default-features = false, features = ["unicode-perl"], optional = true }
