@@ -9,11 +9,11 @@ mod switch;
 #[derive(Parser)]
 #[command(author, version, about, arg_required_else_help(true))]
 struct Args {
-    /// Method to use for querying and setting output resolutions
+    /// Method to use for querying and setting output resolutions.
     #[arg(long)]
     controller: screen_controller::ScreenController,
     /// When choosing a resolution, choose one with at least this refresh rate.
-    /// The value is specified in thousands of Hz.
+    /// The value is specified in micro Hz, i.e. 60000 is 60 Hz.
     #[arg(long)]
     min_refresh_rate: Option<i32>,
 }
