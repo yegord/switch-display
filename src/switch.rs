@@ -246,6 +246,13 @@ mod tests {
                     location: Location::Internal,
                 },
                 Output {
+                    name: "eDP-2".to_string(),
+                    connected: false,
+                    enabled: true,
+                    modes: vec![TEST_MODE],
+                    location: Location::Internal,
+                },
+                Output {
                     name: "HDMI-1".to_string(),
                     connected: true,
                     enabled: true,
@@ -275,7 +282,7 @@ mod tests {
         // Assert
         assert_eq_ref(
             &switch_plan.outputs_to_disable,
-            &[&screen.outputs[1], &screen.outputs[2]],
+            &[&screen.outputs[1], &screen.outputs[2], &screen.outputs[3]],
         );
         assert_eq_ref(&switch_plan.outputs_to_enable, &[&screen.outputs[0]]);
     }
