@@ -1,11 +1,11 @@
-use crate::screen::{Resolution, Screen};
-use crate::switch::SwitchPlan;
-
 #[cfg(feature = "sway")]
 mod sway;
 mod utils;
 #[cfg(feature = "xrandr")]
 mod xrandr;
+
+use crate::screen::{Resolution, Screen};
+use crate::switch::SwitchPlan;
 
 #[derive(Copy, Clone, Debug, clap::ValueEnum)]
 pub(super) enum ScreenController {

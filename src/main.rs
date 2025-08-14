@@ -1,9 +1,9 @@
 #![forbid(unsafe_code)]
-use clap::Parser;
-
 mod screen;
 mod screen_controller;
 mod switch;
+
+use clap::Parser;
 
 #[derive(Parser)]
 #[command(author, version, about, arg_required_else_help(true))]
