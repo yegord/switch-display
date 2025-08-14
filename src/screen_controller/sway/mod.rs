@@ -1,3 +1,5 @@
+mod parsing;
+
 use std::fmt::Write;
 use std::process;
 
@@ -7,8 +9,6 @@ use crate::{
 };
 
 use super::utils::run;
-
-mod parsing;
 
 struct Swaymsg {
     command: process::Command,

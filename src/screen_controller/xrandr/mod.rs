@@ -1,9 +1,9 @@
+mod parsing;
+
 use super::utils::run;
 use crate::screen::{Resolution, Screen};
 use crate::switch::SwitchPlan;
 use std::process;
-
-mod parsing;
 
 struct Xrandr {
     command: process::Command,
