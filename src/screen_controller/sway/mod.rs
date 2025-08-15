@@ -38,7 +38,8 @@ impl Swaymsg {
                 &mut msg,
                 " mode \"{}x{}\"",
                 resolution.width, resolution.height
-            ).expect("unable to append to msg");
+            )
+            .expect("unable to append to msg");
         }
         self.command.arg(msg);
         self
@@ -78,9 +79,9 @@ pub(super) fn switch_outputs(switch_plan: &SwitchPlan, resolution: Option<Resolu
 
 #[cfg(test)]
 mod tests {
+    use super::super::utils::assert_command_eq;
     use super::*;
     use crate::screen::{Location, Output};
-    use super::super::utils::assert_command_eq;
 
     #[test]
     fn test_make_switch_commands_without_resolution() {
@@ -114,8 +115,16 @@ mod tests {
 
         // Assert
         assert!(commands.len() == 2);
-        assert_command_eq(&commands[0], "swaymsg", &["output \"eDP-1\" enable position 0 0"]);
-        assert_command_eq(&commands[1], "swaymsg", &["output \"HDMI-A-2\" enable position 0 0"]);
+        assert_command_eq(
+            &commands[0],
+            "swaymsg",
+            &["output \"eDP-1\" enable position 0 0"],
+        );
+        assert_command_eq(
+            &commands[1],
+            "swaymsg",
+            &["output \"HDMI-A-2\" enable position 0 0"],
+        );
     }
 
     #[test]
@@ -154,6 +163,10 @@ mod tests {
         // Assert
         assert!(commands.len() == 2);
         assert_command_eq(&commands[0], "swaymsg", &["output \"eDP-1\" disable"]);
-        assert_command_eq(&commands[1], "swaymsg", &["output \"HDMI-A-2\" enable position 0 0 mode \"1920x1080\""]);
+        assert_command_eq(
+            &commands[1],
+            "swaymsg",
+            &["output \"HDMI-A-2\" enable position 0 0 mode \"1920x1080\""],
+        );
     }
 }
