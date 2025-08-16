@@ -42,7 +42,11 @@ impl Location {
     pub(crate) fn from_output_name(name: &str) -> Location {
         if name.starts_with("eDP-") || name.starts_with("LVDS-") {
             Location::Internal
-        } else if name.starts_with("HDMI-") || name.starts_with("DP-") {
+        } else if name.starts_with("DP-")
+            || name.starts_with("DVI-")
+            || name.starts_with("HDMI-")
+            || name.starts_with("VGA-")
+        {
             Location::External
         } else {
             unreachable!("FIXME: output with unknown location: {}", name);
@@ -58,9 +62,9 @@ mod tests {
     fn test_location_from_output_name() {
         assert_eq!(Location::from_output_name("eDP-1"), Location::Internal);
         assert_eq!(Location::from_output_name("LVDS-1"), Location::Internal);
-        assert_eq!(Location::from_output_name("HDMI-1"), Location::External);
-        assert_eq!(Location::from_output_name("HDMI-2"), Location::External);
         assert_eq!(Location::from_output_name("DP-1"), Location::External);
-        assert_eq!(Location::from_output_name("DP-2"), Location::External);
+        assert_eq!(Location::from_output_name("DVI-1"), Location::External);
+        assert_eq!(Location::from_output_name("HDMI-2"), Location::External);
+        assert_eq!(Location::from_output_name("VGA-1"), Location::External);
     }
 }
