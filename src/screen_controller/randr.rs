@@ -34,12 +34,14 @@ pub(super) fn get_outputs() -> screen::Screen {
                 .modes
                 .iter()
                 .map(|&mode_id| {
-                    let mode = screen_resources
+                    screen_resources
                         .modes
                         .iter()
                         .find(|m| m.id == mode_id)
-                        .expect("unable to find mode info by mode id");
-
+                        .expect("unable to find mode info by mode id")
+                })
+                .filter(|mode| !mode.mode_flags.contains(ModeFlag::DOUBLE_SCAN))
+                .map(|mode| {
                     let resolution = screen::Resolution {
                         width: mode.width as u32,
                         height: mode.height as u32,
