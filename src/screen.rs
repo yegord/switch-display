@@ -15,20 +15,20 @@ pub(crate) struct Output {
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) struct Mode {
     pub(crate) resolution: Resolution,
-    pub(crate) refresh_rate: i32,
+    pub(crate) refresh_rate: u32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct Resolution {
-    pub(crate) width: i32,
-    pub(crate) height: i32,
+    pub(crate) width: u32,
+    pub(crate) height: u32,
 }
 
 impl Resolution {
-    pub(crate) fn area(&self) -> i32 {
-        self.width
-            .checked_mul(self.height)
-            .expect("area should normally fit into i32")
+    pub(crate) fn area(&self) -> u64 {
+        (self.width as u64)
+            .checked_mul(self.height as u64)
+            .expect("area should normally fit into u64")
     }
 }
 
@@ -66,5 +66,17 @@ mod tests {
         assert_eq!(Location::from_output_name("DVI-1"), Location::External);
         assert_eq!(Location::from_output_name("HDMI-2"), Location::External);
         assert_eq!(Location::from_output_name("VGA-1"), Location::External);
+    }
+
+    #[test]
+    fn large_resolution_area() {
+        assert_eq!(
+            Resolution {
+                width: u32::MAX,
+                height: u32::MAX
+            }
+            .area(),
+            18446744065119617025
+        );
     }
 }

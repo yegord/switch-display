@@ -49,8 +49,8 @@ impl Parser {
         };
 
         for caps in self.freq_regex.captures_iter(&caps["freqs"]) {
-            let x: i32 = caps[1].parse().expect("bad integer part");
-            let y: i32 = caps[2].parse().expect("bad fractional part");
+            let x: u32 = caps[1].parse().expect("bad integer part");
+            let y: u32 = caps[2].parse().expect("bad fractional part");
             assert!((0..100).contains(&y));
             let refresh_rate = x * 1000 + y * 10;
 
