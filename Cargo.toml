@@ -6,9 +6,10 @@ authors = ["Yegor Derevenets <yegor.derevenets@gmail.com>"]
 description = "Toggle connected displays between three states: all on, only external on, only internal on"
 
 [features]
-default = ["xrandr", "sway"]
+default = ["xrandr", "sway", "randr"]
 xrandr = ["dep:regex"]
 sway = ["dep:serde", "dep:serde_json"]
+randr = ["dep:x11rb", "xrandr"]
 
 [dependencies]
 clap = { version = "4.5.45", features = ["derive", "env"] }
@@ -17,3 +18,4 @@ log = "0.4.27"
 regex = { version = "1.11.1", default-features = false, features = ["unicode-perl"], optional = true }
 serde = { version = "1.0.219", optional = true, features = ["derive"] }
 serde_json = { version = "1.0.142", optional = true }
+x11rb = { version = "0.13.1", features = ["randr"], optional = true }

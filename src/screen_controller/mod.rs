@@ -3,6 +3,8 @@ mod sway;
 mod utils;
 #[cfg(feature = "xrandr")]
 mod xrandr;
+#[cfg(feature = "randr")]
+mod randr;
 
 use crate::screen::{Resolution, Screen};
 use crate::switch::SwitchPlan;
@@ -13,6 +15,8 @@ pub(super) enum ScreenController {
     Xrandr,
     #[cfg(feature = "sway")]
     Sway,
+    #[cfg(feature = "randr")]
+    Randr,
 }
 
 impl ScreenController {
@@ -22,6 +26,8 @@ impl ScreenController {
             ScreenController::Xrandr => xrandr::get_outputs(),
             #[cfg(feature = "sway")]
             ScreenController::Sway => sway::get_outputs(),
+            #[cfg(feature = "randr")]
+            ScreenController::Randr => randr::get_outputs(),
         }
     }
 
@@ -31,6 +37,9 @@ impl ScreenController {
             ScreenController::Xrandr => xrandr::switch_outputs(switch_plan, resolution),
             #[cfg(feature = "sway")]
             ScreenController::Sway => sway::switch_outputs(switch_plan, resolution),
+            #[cfg(feature = "randr")]
+            // TODO: switch using RANDR extension directly.
+            ScreenController::Randr => xrandr::switch_outputs(switch_plan, resolution),
         }
     }
 }
