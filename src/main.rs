@@ -14,7 +14,7 @@ struct Args {
     /// When choosing a resolution, choose one with at least this refresh rate.
     /// The value is specified in microhertz, i.e. 60000 is 60 Hz.
     #[arg(long, env = "SWITCH_DISPLAY_MIN_REFRESH_RATE")]
-    min_refresh_rate: Option<i32>,
+    min_refresh_rate: Option<u32>,
 }
 
 fn main() {

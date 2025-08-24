@@ -66,7 +66,7 @@ pub(super) fn build_switch_plan<'a>(screen: &'a Screen) -> SwitchPlan<'a> {
 
 pub(super) fn choose_best_resolution(
     outputs: &[&Output],
-    min_refresh_rate: Option<i32>,
+    min_refresh_rate: Option<u32>,
 ) -> Option<Resolution> {
     outputs
         .iter()

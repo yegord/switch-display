@@ -11,9 +11,9 @@ struct RpcOutput<'a> {
 
 #[derive(Debug, Deserialize)]
 struct RpcMode {
-    width: i32,
-    height: i32,
-    refresh: i32,
+    width: u32,
+    height: u32,
+    refresh: u32,
 }
 
 pub(super) fn parse(swaymsg_output: &[u8]) -> Screen {
