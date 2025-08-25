@@ -38,8 +38,7 @@ impl ScreenController {
             #[cfg(feature = "sway")]
             ScreenController::Sway => sway::switch_outputs(switch_plan, resolution),
             #[cfg(feature = "randr")]
-            // TODO: switch using RANDR extension directly.
-            ScreenController::Randr => xrandr::switch_outputs(switch_plan, resolution),
+            ScreenController::Randr => randr::switch_outputs(switch_plan, resolution),
         }
     }
 }
