@@ -227,7 +227,9 @@ fn update_crtcs(
                 .find(|crtc_id| {
                     crtcs
                         .get(crtc_id)
-                        .is_some_and(|crtc_config| crtc_config.outputs.is_empty())
+                        .expect("invalid crtc id")
+                        .outputs
+                        .is_empty()
                 })
                 .expect("no free crtcs available for output");
 
