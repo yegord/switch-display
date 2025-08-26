@@ -167,9 +167,11 @@ fn mode_ids_to_modes<'a>(
     mode_ids: &[randr::Mode],
     modes: &'a HashMap<randr::Mode, randr::ModeInfo>,
 ) -> impl Iterator<Item = &'a randr::ModeInfo> {
-    mode_ids
-        .iter()
-        .map(|mode_id| modes.get(mode_id).expect("invalid mode id"))
+    mode_ids.iter().map(|mode_id| {
+        let mode = modes.get(mode_id).expect("invalid mode id");
+        assert_eq!(*mode_id, mode.id);
+        mode
+    })
 }
 
 fn is_admissible(mode: &randr::ModeInfo) -> bool {
@@ -179,7 +181,7 @@ fn is_admissible(mode: &randr::ModeInfo) -> bool {
 fn randr_mode_to_mode(mode: &randr::ModeInfo) -> screen::Mode {
     screen::Mode {
         resolution: randr_mode_to_resolution(mode),
-        refresh_rate_millihz: compute_refresh_rate(mode),
+        refresh_rate_millihz: compute_refresh_rate_millihz(mode),
     }
 }
 
@@ -190,7 +192,7 @@ fn randr_mode_to_resolution(mode: &randr::ModeInfo) -> screen::Resolution {
     }
 }
 
-fn compute_refresh_rate(mode: &randr::ModeInfo) -> u32 {
+fn compute_refresh_rate_millihz(mode: &randr::ModeInfo) -> u32 {
     if mode.htotal > 0 && mode.vtotal > 0 {
         u32::try_from(mode.dot_clock as u64 * 1000 / (mode.htotal as u64 * mode.vtotal as u64))
             .expect("refresh rate should fit into u32")
@@ -262,6 +264,23 @@ fn update_crtcs(
         crtc.mode = choose_best_mode(output, modes, resolution).expect("output has no modes");
         crtc.rotation = randr::Rotation::ROTATE0;
     }
+
+    assert!(crtcs.iter().all(
+        |(&crtc_id, crtc)| (crtc.mode == 0) == crtc.outputs.is_empty()
+            && crtc.outputs.iter().all(|output_id| {
+                outputs
+                    .get(output_id)
+                    .is_some_and(|output| output.crtc == crtc_id)
+            })
+    ));
+    assert!(
+        outputs
+            .iter()
+            .filter(|(_, output)| output.crtc != 0)
+            .all(|(output_id, output)| crtcs
+                .get(&output.crtc)
+                .is_some_and(|crtc| crtc.outputs.contains(output_id)))
+    );
 }
 
 fn choose_best_mode(
@@ -280,14 +299,19 @@ fn choose_best_mode(
             preferred: i < output.num_preferred as usize,
             mode,
         })
+        .filter(|candidate| candidate.preferred || is_admissible(candidate.mode))
         .collect();
 
     if let Some(resolution) = resolution {
         if let Some(candidate) = candidates
             .iter()
-            .filter(|candidate| candidate.preferred || is_admissible(candidate.mode))
             .filter(|candidate| randr_mode_to_resolution(candidate.mode) == resolution)
-            .max_by_key(|candidate| (candidate.preferred, compute_refresh_rate(candidate.mode)))
+            .max_by_key(|candidate| {
+                (
+                    candidate.preferred,
+                    compute_refresh_rate_millihz(candidate.mode),
+                )
+            })
         {
             return Some(candidate.mode.id);
         }
@@ -299,7 +323,7 @@ fn choose_best_mode(
             (
                 candidate.preferred,
                 randr_mode_to_resolution(candidate.mode).area(),
-                compute_refresh_rate(candidate.mode),
+                compute_refresh_rate_millihz(candidate.mode),
             )
         })
         .map(|candidate| candidate.mode.id)
@@ -408,6 +432,348 @@ mod tests {
 
         // Assert
         assert_eq!(screen, new_screen);
+    }
+
+    #[test]
+    fn test_randr_output_to_output_on_internal_connected_enabled_output() {
+        // Arrange
+        let randr_output = randr::GetOutputInfoReply {
+            crtc: 42,
+            connection: randr::Connection::CONNECTED,
+            modes: vec![1, 2],
+            name: b"eDP-1".to_vec(),
+            ..Default::default()
+        };
+
+        let modes = hashmap! {
+            1 => randr::ModeInfo {
+                id: 1,
+                width: 1920,
+                height: 1080,
+                dot_clock: 138700000,
+                htotal: 2080,
+                vtotal: 1111,
+                ..Default::default()
+            },
+            2 => randr::ModeInfo {
+                id: 2,
+                width: 3840,
+                height: 2160,
+                dot_clock: 138700000,
+                htotal: 2080,
+                vtotal: 1111,
+                mode_flags: randr::ModeFlag::DOUBLE_SCAN,
+                ..Default::default()
+            },
+        };
+
+        // Act
+        let output = randr_output_to_output(&randr_output, &modes);
+
+        // Assert
+        assert_eq!(
+            output,
+            screen::Output {
+                name: "eDP-1".to_owned(),
+                enabled: true,
+                connected: true,
+                modes: vec! {screen::Mode {
+                    resolution: screen::Resolution {
+                        width: 1920,
+                        height: 1080,
+                    },
+                    refresh_rate_millihz: 60020,
+                }},
+                location: screen::Location::Internal,
+            }
+        );
+    }
+
+    #[test]
+    fn test_randr_output_to_output_on_external_disconnected_output() {
+        // Arrange
+        let randr_output = randr::GetOutputInfoReply {
+            connection: randr::Connection::DISCONNECTED,
+            name: b"HDMI-1".to_vec(),
+            ..Default::default()
+        };
+
+        let modes = HashMap::new();
+
+        // Act
+        let output = randr_output_to_output(&randr_output, &modes);
+
+        // Assert
+        assert_eq!(
+            output,
+            screen::Output {
+                name: "HDMI-1".to_owned(),
+                enabled: false,
+                connected: false,
+                modes: Vec::new(),
+                location: screen::Location::External,
+            }
+        );
+    }
+
+    #[test]
+    fn test_is_admissible() {
+        assert!(is_admissible(&randr::ModeInfo {
+            ..Default::default()
+        }));
+        assert!(!is_admissible(&randr::ModeInfo {
+            mode_flags: randr::ModeFlag::DOUBLE_SCAN,
+            ..Default::default()
+        }));
+    }
+
+    #[test]
+    fn test_randr_mode_to_mode() {
+        assert_eq!(
+            randr_mode_to_mode(&randr::ModeInfo {
+                width: 1920,
+                height: 1080,
+                dot_clock: 138700000,
+                htotal: 2080,
+                vtotal: 1111,
+                ..Default::default()
+            }),
+            screen::Mode {
+                resolution: screen::Resolution {
+                    width: 1920,
+                    height: 1080,
+                },
+                refresh_rate_millihz: 60020,
+            }
+        );
+    }
+
+    #[test]
+    fn test_randr_mode_to_resolution() {
+        assert_eq!(
+            randr_mode_to_resolution(&randr::ModeInfo {
+                width: 640,
+                height: 480,
+                ..Default::default()
+            }),
+            screen::Resolution {
+                width: 640,
+                height: 480
+            }
+        );
+    }
+
+    #[test]
+    fn test_compute_refresh_rate_millihz() {
+        assert_eq!(
+            compute_refresh_rate_millihz(&randr::ModeInfo {
+                dot_clock: 138700000,
+                htotal: 2080,
+                vtotal: 1111,
+                ..Default::default()
+            }),
+            60020
+        );
+        assert_eq!(
+            compute_refresh_rate_millihz(&randr::ModeInfo {
+                dot_clock: 138700000,
+                htotal: 0,
+                vtotal: 1111,
+                ..Default::default()
+            }),
+            0
+        );
+        assert_eq!(
+            compute_refresh_rate_millihz(&randr::ModeInfo {
+                dot_clock: 138700000,
+                htotal: 2080,
+                vtotal: 0,
+                ..Default::default()
+            }),
+            0
+        );
+    }
+
+    #[test]
+    fn when_no_modes_available_choose_best_mode_returns_none() {
+        // Arrange
+        let output = randr::GetOutputInfoReply {
+            ..Default::default()
+        };
+        let modes = HashMap::new();
+        let resolution = None;
+
+        // Act
+        let mode_id = choose_best_mode(&output, &modes, resolution);
+
+        // Assert
+        assert!(mode_id.is_none());
+    }
+
+    #[test]
+    fn when_no_preferred_or_admissible_mode_available_choose_best_mode_returns_none() {
+        // Arrange
+        let output = randr::GetOutputInfoReply {
+            modes: vec![1],
+            ..Default::default()
+        };
+        let modes = hashmap!(
+            1 => randr::ModeInfo{id: 1, mode_flags: randr::ModeFlag::DOUBLE_SCAN, ..Default::default()},
+        );
+        let resolution = None;
+
+        // Act
+        let mode_id = choose_best_mode(&output, &modes, resolution);
+
+        // Assert
+        assert!(mode_id.is_none());
+    }
+
+    #[test]
+    fn when_preferred_but_not_admissible_mode_available_choose_best_mode_returns_it() {
+        // Arrange
+        let output = randr::GetOutputInfoReply {
+            modes: vec![1],
+            num_preferred: 1,
+            ..Default::default()
+        };
+        let modes = hashmap!(
+            1 => randr::ModeInfo{id: 1, mode_flags: randr::ModeFlag::DOUBLE_SCAN, ..Default::default()},
+        );
+        let resolution = None;
+
+        // Act
+        let mode_id = choose_best_mode(&output, &modes, resolution);
+
+        // Assert
+        assert_eq!(mode_id, Some(1));
+    }
+
+    #[test]
+    fn when_not_preferred_but_admissible_mode_available_choose_best_mode_returns_it() {
+        // Arrange
+        let output = randr::GetOutputInfoReply {
+            modes: vec![1],
+            ..Default::default()
+        };
+        let modes = hashmap!(
+            1 => randr::ModeInfo{id: 1, ..Default::default()},
+        );
+        let resolution = None;
+
+        // Act
+        let mode_id = choose_best_mode(&output, &modes, resolution);
+
+        // Assert
+        assert_eq!(mode_id, Some(1));
+    }
+
+    #[test]
+    fn choose_best_mode_prefers_preferred_mode() {
+        // Arrange
+        let output = randr::GetOutputInfoReply {
+            modes: vec![1, 2],
+            num_preferred: 1,
+            ..Default::default()
+        };
+        let modes = hashmap!(
+            1 => randr::ModeInfo{id: 1, width: 640, height: 480, ..Default::default()},
+            2 => randr::ModeInfo{id: 2, width: 800, height: 600, ..Default::default()},
+        );
+        let resolution = None;
+
+        // Act
+        let mode_id = choose_best_mode(&output, &modes, resolution);
+
+        // Assert
+        assert_eq!(mode_id, Some(1));
+    }
+
+    #[test]
+    fn choose_best_mode_prefers_larger_mode() {
+        // Arrange
+        let output = randr::GetOutputInfoReply {
+            modes: vec![1, 2],
+            ..Default::default()
+        };
+        let modes = hashmap!(
+            1 => randr::ModeInfo{id: 1, width: 640, height: 480, ..Default::default()},
+            2 => randr::ModeInfo{id: 2, width: 800, height: 600, ..Default::default()},
+        );
+        let resolution = None;
+
+        // Act
+        let mode_id = choose_best_mode(&output, &modes, resolution);
+
+        // Assert
+        assert_eq!(mode_id, Some(2));
+    }
+
+    #[test]
+    fn choose_best_mode_prefers_mode_with_higher_refresh_rate() {
+        // Arrange
+        let output = randr::GetOutputInfoReply {
+            modes: vec![1, 2],
+            ..Default::default()
+        };
+        let modes = hashmap!(
+            1 => randr::ModeInfo{id: 1, width: 640, height: 480, dot_clock: 1, htotal: 1, vtotal: 1, ..Default::default()},
+            2 => randr::ModeInfo{id: 2, width: 640, height: 480, dot_clock: 2, htotal: 1, vtotal: 1, ..Default::default()},
+        );
+        let resolution = None;
+
+        // Act
+        let mode_id = choose_best_mode(&output, &modes, resolution);
+
+        // Assert
+        assert_eq!(mode_id, Some(2));
+    }
+
+    #[test]
+    fn when_resolution_provided_choose_best_mode_prefers_preferred_mode() {
+        // Arrange
+        let output = randr::GetOutputInfoReply {
+            modes: vec![1, 2],
+            num_preferred: 1,
+            ..Default::default()
+        };
+        let modes = hashmap!(
+            1 => randr::ModeInfo{id: 1, width: 640, height: 480, dot_clock: 1, htotal: 1, vtotal: 1, ..Default::default()},
+            2 => randr::ModeInfo{id: 2, width: 640, height: 480, dot_clock: 2, htotal: 1, vtotal: 1, ..Default::default()},
+        );
+        let resolution = Some(screen::Resolution {
+            width: 640,
+            height: 480,
+        });
+
+        // Act
+        let mode_id = choose_best_mode(&output, &modes, resolution);
+
+        // Assert
+        assert_eq!(mode_id, Some(1));
+    }
+
+    #[test]
+    fn when_resolution_provided_choose_best_mode_prefers_mode_with_highest_refresh_rate() {
+        // Arrange
+        let output = randr::GetOutputInfoReply {
+            modes: vec![1, 2],
+            ..Default::default()
+        };
+        let modes = hashmap!(
+            1 => randr::ModeInfo{id: 1, width: 640, height: 480, dot_clock: 1, htotal: 1, vtotal: 1, ..Default::default()},
+            2 => randr::ModeInfo{id: 2, width: 640, height: 480, dot_clock: 2, htotal: 1, vtotal: 1, ..Default::default()},
+        );
+        let resolution = Some(screen::Resolution {
+            width: 640,
+            height: 480,
+        });
+
+        // Act
+        let mode_id = choose_best_mode(&output, &modes, resolution);
+
+        // Assert
+        assert_eq!(mode_id, Some(2));
     }
 
     #[test]
