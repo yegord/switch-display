@@ -19,6 +19,7 @@ pub(super) enum ScreenControllerType {
     Randr,
 }
 
+#[allow(clippy::large_enum_variant)]
 enum ScreenControllerData {
     #[cfg(feature = "xrandr")]
     Xrandr,
@@ -53,7 +54,11 @@ impl ScreenController {
         }
     }
 
-    pub(super) fn switch_outputs(&mut self, switch_plan: &SwitchPlan, resolution: Option<Resolution>) {
+    pub(super) fn switch_outputs(
+        &mut self,
+        switch_plan: &SwitchPlan,
+        resolution: Option<Resolution>,
+    ) {
         match &mut self.0 {
             #[cfg(feature = "xrandr")]
             ScreenControllerData::Xrandr => xrandr::switch_outputs(switch_plan, resolution),
