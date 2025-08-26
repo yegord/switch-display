@@ -183,10 +183,10 @@ fn compute_refresh_rate(mode: &randr::ModeInfo) -> u32 {
     }
 }
 
-fn update_crtcs<'a>(
+fn update_crtcs(
     switch_plan: &SwitchPlan,
     resolution: Option<screen::Resolution>,
-    modes: &HashMap<u32, &'a randr::ModeInfo>,
+    modes: &HashMap<u32, &randr::ModeInfo>,
     outputs: &HashMap<randr::Output, randr::GetOutputInfoReply>,
     crtcs: &mut HashMap<randr::Crtc, randr::GetCrtcInfoReply>,
 ) {
