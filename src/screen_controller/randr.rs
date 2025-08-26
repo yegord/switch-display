@@ -74,7 +74,7 @@ pub(super) fn switch_outputs(switch_plan: &SwitchPlan, resolution: Option<screen
         })
         .collect();
 
-    let crtcs: HashMap<_, _> = screen_resources
+    let mut crtcs: HashMap<_, _> = screen_resources
         .crtcs
         .iter()
         .copied()
@@ -89,9 +89,9 @@ pub(super) fn switch_outputs(switch_plan: &SwitchPlan, resolution: Option<screen
         })
         .collect();
 
-    let crtc_configs = compute_crtc_configs(switch_plan, resolution, &modes, &outputs, &crtcs);
+    update_crtcs(switch_plan, resolution, &modes, &outputs, &mut crtcs);
 
-    for (&crtc_id, crtc_config) in &crtc_configs {
+    for (&crtc_id, crtc_config) in &crtcs {
         log::trace!("crtc_id = {crtc_id} crtc_config = {crtc_config:?}");
         conn.randr_set_crtc_config(
             crtc_id,
@@ -99,7 +99,7 @@ pub(super) fn switch_outputs(switch_plan: &SwitchPlan, resolution: Option<screen
             screen_resources.config_timestamp,
             crtc_config.x,
             crtc_config.y,
-            crtc_config.mode.map(|mode| mode.id).unwrap_or(0),
+            crtc_config.mode,
             crtc_config.rotation,
             &crtc_config.outputs,
         )
@@ -108,7 +108,7 @@ pub(super) fn switch_outputs(switch_plan: &SwitchPlan, resolution: Option<screen
         .expect("randr_set_crtc_config returned an error");
     }
 
-    if let Some(screen_size) = compute_screen_size(&crtc_configs, &outputs) {
+    if let Some(screen_size) = compute_screen_size(&modes, &outputs, &crtcs) {
         log::trace!("screen_size = {screen_size:?}");
         conn.randr_set_screen_size(
             screen.root,
@@ -183,47 +183,29 @@ fn compute_refresh_rate(mode: &randr::ModeInfo) -> u32 {
     }
 }
 
-#[derive(Debug)]
-struct CrtcConfig<'a> {
-    x: i16,
-    y: i16,
-    mode: Option<&'a randr::ModeInfo>,
-    rotation: randr::Rotation,
-    outputs: Vec<randr::Output>,
-}
-
-impl<'a> CrtcConfig<'a> {
-    fn from_crtc(
-        crtc: &randr::GetCrtcInfoReply,
-        modes: &HashMap<randr::Mode, &'a randr::ModeInfo>,
-    ) -> Self {
-        CrtcConfig {
-            x: crtc.x,
-            y: crtc.y,
-            mode: if crtc.mode == 0 {
-                None
-            } else {
-                Some(modes.get(&crtc.mode).expect("bad mode id"))
-            },
-            rotation: crtc.rotation,
-            outputs: crtc.outputs.clone(),
-        }
-    }
-}
-
-fn compute_crtc_configs<'a>(
+fn update_crtcs<'a>(
     switch_plan: &SwitchPlan,
     resolution: Option<screen::Resolution>,
     modes: &HashMap<u32, &'a randr::ModeInfo>,
     outputs: &HashMap<randr::Output, randr::GetOutputInfoReply>,
-    crtcs: &HashMap<randr::Crtc, randr::GetCrtcInfoReply>,
-) -> HashMap<randr::Crtc, CrtcConfig<'a>> {
+    crtcs: &mut HashMap<randr::Crtc, randr::GetCrtcInfoReply>,
+) {
     let outputs_to_disable = outputs.iter().filter(|(_, output)| {
         switch_plan
             .outputs_to_disable
             .iter()
             .any(|output_to_disable| output_to_disable.name.as_bytes() == output.name)
     });
+
+    for (output_id, output) in outputs_to_disable {
+        assert!(output.crtc != 0);
+        let crtc = crtcs.get_mut(&output.crtc).expect("invalid crtc id");
+        assert!(crtc.outputs.contains(output_id));
+        crtc.outputs.retain(|id| id != output_id);
+        if crtc.outputs.is_empty() {
+            crtc.mode = 0;
+        }
+    }
 
     let outputs_to_enable = outputs.iter().filter(|(_, output)| {
         switch_plan
@@ -232,52 +214,36 @@ fn compute_crtc_configs<'a>(
             .any(|output_to_enable| output_to_enable.name.as_bytes() == output.name)
     });
 
-    let mut crtc_configs: HashMap<_, _> = crtcs
-        .iter()
-        .map(|(crtc_id, crtc)| (*crtc_id, CrtcConfig::from_crtc(crtc, modes)))
-        .collect();
-
-    for (output_id, output) in outputs_to_disable {
-        assert!(output.crtc != 0);
-        let crtc_config = crtc_configs.get_mut(&output.crtc).expect("invalid crtc id");
-        assert!(crtc_config.outputs.contains(output_id));
-        crtc_config.outputs.retain(|id| id != output_id);
-        if crtc_config.outputs.is_empty() {
-            crtc_config.mode = None;
-        }
-    }
-
     for (output_id, output) in outputs_to_enable {
-        let crtc_config = if output.crtc != 0 {
-            let crtc_config = crtc_configs.get_mut(&output.crtc).expect("invalid crtc id");
-            assert!(crtc_config.outputs.contains(output_id));
-            crtc_config
+        let crtc = if output.crtc != 0 {
+            let crtc = crtcs.get_mut(&output.crtc).expect("invalid crtc id");
+            assert!(crtc.outputs.contains(output_id));
+            crtc
         } else {
             let crtc_id = output
                 .crtcs
                 .iter()
                 .copied()
                 .find(|crtc_id| {
-                    crtc_configs
+                    crtcs
                         .get(crtc_id)
                         .is_some_and(|crtc_config| crtc_config.outputs.is_empty())
                 })
                 .expect("no free crtcs available for output");
 
-            let crtc_config = crtc_configs.get_mut(&crtc_id).expect("invalid crtc id");
-            assert!(!crtc_config.outputs.contains(output_id));
-            crtc_config.outputs.push(*output_id);
-            crtc_config
+            let crtc = crtcs.get_mut(&crtc_id).expect("invalid crtc id");
+            assert!(!crtc.outputs.contains(output_id));
+            crtc.outputs.push(*output_id);
+            crtc
         };
 
-        crtc_config.x = 0;
-        crtc_config.y = 0;
-        crtc_config.mode =
-            Some(choose_best_mode(output, modes, resolution).expect("output has no modes"));
-        crtc_config.rotation = randr::Rotation::ROTATE0;
+        crtc.x = 0;
+        crtc.y = 0;
+        crtc.mode = choose_best_mode(output, modes, resolution)
+            .expect("output has no modes")
+            .id;
+        crtc.rotation = randr::Rotation::ROTATE0;
     }
-
-    crtc_configs
 }
 
 fn choose_best_mode<'a>(
@@ -330,20 +296,21 @@ struct ScreenSize {
 }
 
 fn compute_screen_size(
-    crtc_configs: &HashMap<randr::Crtc, CrtcConfig>,
+    modes: &HashMap<randr::Mode, &randr::ModeInfo>,
     outputs: &HashMap<randr::Output, randr::GetOutputInfoReply>,
+    crtcs: &HashMap<randr::Crtc, randr::GetCrtcInfoReply>,
 ) -> Option<ScreenSize> {
-    let bboxes: Vec<_> = crtc_configs
+    let bboxes: Vec<_> = crtcs
         .values()
-        .filter_map(|crtc_config| {
-            crtc_config.mode.map(|mode| {
-                (
-                    crtc_config.x as i32,
-                    crtc_config.y as i32,
-                    crtc_config.x as i32 + mode.width as i32,
-                    crtc_config.y as i32 + mode.height as i32,
-                )
-            })
+        .filter(|crtc| crtc.mode != 0)
+        .map(|crtc| {
+            let mode = *modes.get(&crtc.mode).expect("invalid mode id");
+            (
+                crtc.x as i32,
+                crtc.y as i32,
+                crtc.x as i32 + mode.width as i32,
+                crtc.y as i32 + mode.height as i32,
+            )
         })
         .collect();
 
@@ -356,7 +323,7 @@ fn compute_screen_size(
         let width = u16::try_from(max_x - min_x).expect("too large screen width");
         let height = u16::try_from(max_y - min_y).expect("too large screen height");
 
-        let (mm_width, mm_height) = crtc_configs
+        let (mm_width, mm_height) = crtcs
             .values()
             .flat_map(|crtc_config| crtc_config.outputs.iter())
             .map(|output_id| outputs.get(output_id).expect("invalid output id"))
@@ -380,7 +347,7 @@ fn px_to_mm(px: u16) -> u32 {
     const DPI: f32 = 96.0;
     const MM_PER_INCH: f32 = 25.4;
 
-    ((px as f32 / DPI) * MM_PER_INCH).round() as u32
+    (px as f32 * (MM_PER_INCH / DPI)).round() as u32
 }
 
 #[cfg(test)]
@@ -426,11 +393,12 @@ mod tests {
     #[test]
     fn when_no_crtcs_compute_screen_size_returns_none() {
         // Arrange
-        let crtc_configs = HashMap::new();
+        let modes = HashMap::new();
         let outputs = HashMap::new();
+        let crtcs = HashMap::new();
 
         // Act
-        let size = compute_screen_size(&crtc_configs, &outputs);
+        let size = compute_screen_size(&modes, &crtcs, &outputs);
 
         // Assert
         assert!(size.is_none());
@@ -439,15 +407,16 @@ mod tests {
     #[test]
     fn when_no_crtcs_enabled_compute_screen_size_returns_none() {
         // Arrange
-        let crtc_configs = hashmap! {
-            1 => CrtcConfig { x: 0, y: 0, mode: None, rotation: randr::Rotation::ROTATE0, outputs: vec!{10} }
-        };
+        let modes = HashMap::new();
         let outputs = hashmap! {
-            10 => randr::GetOutputInfoReply { ..Default::default() }
+            20 => randr::GetOutputInfoReply { ..Default::default() }
+        };
+        let crtcs = hashmap! {
+            10 => randr::GetCrtcInfoReply { mode: 0, outputs: vec!{20}, ..Default::default() }
         };
 
         // Act
-        let size = compute_screen_size(&crtc_configs, &outputs);
+        let size = compute_screen_size(&modes, &outputs, &crtcs);
 
         // Assert
         assert!(size.is_none());
@@ -461,17 +430,20 @@ mod tests {
             height: 480,
             ..Default::default()
         };
-        let crtc_configs = hashmap! {
-            1 => CrtcConfig { x: 0, y: 0, mode: Some(&mode), rotation: randr::Rotation::ROTATE0, outputs: vec!{10} },
-            2 => CrtcConfig { x: -10, y: 10, mode: Some(&mode), rotation: randr::Rotation::ROTATE0, outputs: vec!{20} },
+        let modes = hashmap! {
+            1 => &mode
         };
         let outputs = hashmap! {
             10 => randr::GetOutputInfoReply { ..Default::default() },
-            20 => randr::GetOutputInfoReply { ..Default::default() },
+            11 => randr::GetOutputInfoReply { ..Default::default() },
+        };
+        let crtcs = hashmap! {
+            20 => randr::GetCrtcInfoReply { x: 0, y: 0, mode: 1, outputs: vec!{10}, ..Default::default() },
+            21 => randr::GetCrtcInfoReply { x: -10, y: 10, mode: 1, outputs: vec!{11}, ..Default::default() },
         };
 
         // Act
-        let size = compute_screen_size(&crtc_configs, &outputs);
+        let size = compute_screen_size(&modes, &outputs, &crtcs);
 
         // Assert
         assert_eq!(
@@ -486,25 +458,28 @@ mod tests {
     }
 
     #[test]
-    fn when_crtcs_enabled_and_mm_sizes_known_compute_screen_size_returns_bbox_size_and_max_mm_sizes()
-     {
+    fn when_crtcs_enabled_and_mm_sizes_known_compute_screen_size_returns_bbox_size_and_max_mm_size()
+    {
         // Arrange
         let mode = randr::ModeInfo {
             width: 640,
             height: 480,
             ..Default::default()
         };
-        let crtc_configs = hashmap! {
-            1 => CrtcConfig { x: 0, y: 0, mode: Some(&mode), rotation: randr::Rotation::ROTATE0, outputs: vec!{10} },
-            2 => CrtcConfig { x: 0, y: 0, mode: Some(&mode), rotation: randr::Rotation::ROTATE0, outputs: vec!{20} },
+        let modes = hashmap! {
+            1 => &mode
         };
         let outputs = hashmap! {
             10 => randr::GetOutputInfoReply { mm_width: 100, mm_height: 400, ..Default::default() },
-            20 => randr::GetOutputInfoReply { mm_width: 200, mm_height: 300, ..Default::default() },
+            11 => randr::GetOutputInfoReply { mm_width: 200, mm_height: 300, ..Default::default() },
+        };
+        let crtcs = hashmap! {
+            20 => randr::GetCrtcInfoReply { x: 0, y: 0, mode: 1, outputs: vec!{10}, ..Default::default() },
+            21 => randr::GetCrtcInfoReply { x: 0, y: 0, mode: 1, outputs: vec!{11}, ..Default::default() },
         };
 
         // Act
-        let size = compute_screen_size(&crtc_configs, &outputs);
+        let size = compute_screen_size(&modes, &outputs, &crtcs);
 
         // Assert
         assert_eq!(
