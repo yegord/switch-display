@@ -208,12 +208,15 @@ fn update_crtcs(
     outputs: &mut HashMap<randr::Output, randr::GetOutputInfoReply>,
     crtcs: &mut HashMap<randr::Crtc, randr::GetCrtcInfoReply>,
 ) {
-    let outputs_to_disable = outputs.iter_mut().filter(|(_, output)| {
-        switch_plan
-            .outputs_to_disable
-            .iter()
-            .any(|output_to_disable| output_to_disable.name.as_bytes() == output.name)
-    });
+    let outputs_to_disable = outputs
+        .iter_mut()
+        .filter(|(_, output)| output.crtc != 0)
+        .filter(|(_, output)| {
+            switch_plan
+                .outputs_to_disable
+                .iter()
+                .any(|output_to_disable| output_to_disable.name.as_bytes() == output.name)
+        });
 
     for (output_id, output) in outputs_to_disable {
         assert!(output.crtc != 0);
@@ -592,6 +595,110 @@ mod tests {
             }),
             0
         );
+    }
+
+    #[test]
+    fn test_update_crtcs() {
+        // Arrange
+        let modes = hashmap! {
+            1 => randr::ModeInfo {
+                id: 1,
+                width: 1920,
+                height: 1080,
+                dot_clock: 138700000,
+                htotal: 2080,
+                vtotal: 1111,
+                ..Default::default()
+            }
+        };
+
+        let mut randr_outputs = hashmap! {
+            10 => randr::GetOutputInfoReply {
+                crtc: 20,
+                connection: randr::Connection::CONNECTED,
+                crtcs: vec![20, 21, 22],
+                modes: vec![1],
+                name: b"eDP-1".to_vec(),
+                ..Default::default()
+            },
+            11 => randr::GetOutputInfoReply {
+                crtc: 0,
+                connection: randr::Connection::DISCONNECTED,
+                crtcs: vec![20, 21, 22],
+                modes: vec![1],
+                name: b"HDMI-1".to_vec(),
+                ..Default::default()
+            },
+            12 => randr::GetOutputInfoReply {
+                crtc: 0,
+                connection: randr::Connection::CONNECTED,
+                crtcs: vec![20, 21, 22],
+                modes: vec![1],
+                name: b"HDMI-2".to_vec(),
+                ..Default::default()
+            },
+            13 => randr::GetOutputInfoReply {
+                crtc: 21,
+                connection: randr::Connection::CONNECTED,
+                crtcs: vec![20, 21, 22],
+                modes: vec![1],
+                name: b"HDMI-3".to_vec(),
+                ..Default::default()
+            },
+        };
+
+        let mut crtcs = hashmap! {
+            20 => randr::GetCrtcInfoReply {
+                mode: 1,
+                outputs: vec![10],
+                ..Default::default()
+            },
+            21 => randr::GetCrtcInfoReply {
+                x: 10,
+                y: 20,
+                mode: 1,
+                rotation: randr::Rotation::ROTATE90,
+                outputs: vec![13],
+                ..Default::default()
+            },
+        };
+
+        let resolution = None;
+
+        let outputs: Vec<_> = [10, 11, 12, 13]
+            .iter()
+            .map(|output_id| randr_output_to_output(randr_outputs.get(output_id).unwrap(), &modes))
+            .collect();
+
+        let switch_plan = SwitchPlan {
+            outputs_to_disable: vec![&outputs[0], &outputs[1]],
+            outputs_to_enable: vec![&outputs[2], &outputs[3]],
+        };
+
+        // Act
+        update_crtcs(
+            &switch_plan,
+            resolution,
+            &modes,
+            &mut randr_outputs,
+            &mut crtcs,
+        );
+
+        // Assert
+        assert_eq!(randr_outputs.get(&10).unwrap().crtc, 0);
+        assert_eq!(randr_outputs.get(&11).unwrap().crtc, 0);
+        assert_eq!(randr_outputs.get(&12).unwrap().crtc, 20);
+        assert_eq!(randr_outputs.get(&13).unwrap().crtc, 21);
+
+        let crtc1 = crtcs.get(&20).unwrap();
+        assert_eq!(crtc1.outputs.as_slice(), [12]);
+
+        let crtc2 = crtcs.get(&21).unwrap();
+        assert_eq!(crtc2.outputs.as_slice(), [13]);
+        assert_eq!(crtc2.x, 0);
+        assert_eq!(crtc2.y, 0);
+        assert_eq!(crtc2.mode, 1);
+        assert_eq!(crtc2.rotation, randr::Rotation::ROTATE0);
     }
 
     #[test]
