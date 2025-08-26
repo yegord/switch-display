@@ -239,18 +239,16 @@ fn update_crtcs(
 
         crtc.x = 0;
         crtc.y = 0;
-        crtc.mode = choose_best_mode(output, modes, resolution)
-            .expect("output has no modes")
-            .id;
+        crtc.mode = choose_best_mode(output, modes, resolution).expect("output has no modes");
         crtc.rotation = randr::Rotation::ROTATE0;
     }
 }
 
-fn choose_best_mode<'a>(
+fn choose_best_mode(
     output: &randr::GetOutputInfoReply,
-    modes: &HashMap<randr::Mode, &'a randr::ModeInfo>,
+    modes: &HashMap<randr::Mode, &randr::ModeInfo>,
     resolution: Option<screen::Resolution>,
-) -> Option<&'a randr::ModeInfo> {
+) -> Option<randr::Mode> {
     struct Candidate<'a> {
         preferred: bool,
         mode: &'a randr::ModeInfo,
@@ -271,7 +269,7 @@ fn choose_best_mode<'a>(
             .filter(|candidate| randr_mode_to_resolution(candidate.mode) == resolution)
             .max_by_key(|candidate| (candidate.preferred, compute_refresh_rate(candidate.mode)))
         {
-            return Some(candidate.mode);
+            return Some(candidate.mode.id);
         }
     }
 
@@ -284,7 +282,7 @@ fn choose_best_mode<'a>(
                 compute_refresh_rate(candidate.mode),
             )
         })
-        .map(|candidate| candidate.mode)
+        .map(|candidate| candidate.mode.id)
 }
 
 #[derive(Debug, PartialEq, Eq)]
