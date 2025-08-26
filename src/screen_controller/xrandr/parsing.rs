@@ -370,10 +370,9 @@ mod test {
     #[test]
     fn test_parse_output() {
         // Arrange
-        let parser = Parser::new();
 
         // Act
-        let screen = parser.parse(TEST_OUTPUT);
+        let screen = parse(TEST_OUTPUT);
 
         // Assert
         assert_eq!(screen.outputs.len(), 5);

@@ -8,9 +8,7 @@ pub(super) fn run(mut command: process::Command) -> process::Output {
 
     assert!(
         output.status.success(),
-        "xrandr exited with status={:?}, stderr={}",
-        output.status,
-        String::from_utf8_lossy(&output.stderr)
+        "{command:?} exited with {output:?}"
     );
 
     output
@@ -36,4 +34,22 @@ pub(super) fn assert_command_eq(
         .collect();
 
     assert_eq!(actual_args, expected_args);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn run_smoke_test() {
+        // Arrange
+        let mut command = process::Command::new("echo");
+        command.arg("OK");
+
+        // Act
+        let output = run(command);
+
+        // Assert
+        assert_eq!(output.stdout, b"OK\n");
+    }
 }

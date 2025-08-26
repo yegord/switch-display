@@ -20,6 +20,7 @@ impl Swaymsg {
             command: process::Command::new("swaymsg"),
         }
     }
+
     fn get_outputs(mut self) -> Self {
         self.command.arg("-t").arg("get_outputs");
         self
