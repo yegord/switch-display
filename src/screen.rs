@@ -1,9 +1,9 @@
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub(crate) struct Screen {
     pub(crate) outputs: Vec<Output>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub(crate) struct Output {
     pub(crate) name: String,
     pub(crate) connected: bool,
@@ -15,7 +15,7 @@ pub(crate) struct Output {
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) struct Mode {
     pub(crate) resolution: Resolution,
-    pub(crate) refresh_rate: u32,
+    pub(crate) refresh_rate_millihz: u32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -26,9 +26,7 @@ pub(crate) struct Resolution {
 
 impl Resolution {
     pub(crate) fn area(&self) -> u64 {
-        (self.width as u64)
-            .checked_mul(self.height as u64)
-            .expect("area should normally fit into u64")
+        self.width as u64 * self.height as u64
     }
 }
 

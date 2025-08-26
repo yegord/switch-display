@@ -36,7 +36,7 @@ pub(super) fn parse(swaymsg_output: &[u8]) -> Screen {
                             width: rpc_mode.width,
                             height: rpc_mode.height,
                         },
-                        refresh_rate: rpc_mode.refresh,
+                        refresh_rate_millihz: rpc_mode.refresh,
                     })
                     .collect(),
                 location: Location::from_output_name(rpc_output.name),
@@ -69,7 +69,7 @@ mod tests {
                     width: 4096,
                     height: 2160
                 },
-                refresh_rate: 30000
+                refresh_rate_millihz: 30000
             }
         );
         assert_eq!(screen.outputs[1].name, "eDP-1");

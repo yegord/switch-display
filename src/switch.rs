@@ -76,7 +76,7 @@ pub(super) fn choose_best_resolution(
                 .iter()
                 .filter(|mode| {
                     min_refresh_rate
-                        .is_none_or(|min_refresh_rate| mode.refresh_rate >= min_refresh_rate)
+                        .is_none_or(|min_refresh_rate| mode.refresh_rate_millihz >= min_refresh_rate)
                 })
                 .map(|mode| mode.resolution)
                 .collect::<HashSet<_>>()
@@ -312,14 +312,14 @@ mod tests {
                         width: 1920,
                         height: 1080,
                     },
-                    refresh_rate: 60000,
+                    refresh_rate_millihz: 60000,
                 },
                 Mode {
                     resolution: Resolution {
                         width: 640,
                         height: 480,
                     },
-                    refresh_rate: 60000,
+                    refresh_rate_millihz: 60000,
                 },
             ],
             location: Location::Internal,
@@ -352,21 +352,21 @@ mod tests {
                             width: 1920,
                             height: 1080,
                         },
-                        refresh_rate: 60000,
+                        refresh_rate_millihz: 60000,
                     },
                     Mode {
                         resolution: Resolution {
                             width: 800,
                             height: 600,
                         },
-                        refresh_rate: 60000,
+                        refresh_rate_millihz: 60000,
                     },
                     Mode {
                         resolution: Resolution {
                             width: 640,
                             height: 480,
                         },
-                        refresh_rate: 60000,
+                        refresh_rate_millihz: 60000,
                     },
                 ],
                 location: Location::Internal,
@@ -381,14 +381,14 @@ mod tests {
                             width: 800,
                             height: 600,
                         },
-                        refresh_rate: 30000,
+                        refresh_rate_millihz: 30000,
                     },
                     Mode {
                         resolution: Resolution {
                             width: 640,
                             height: 480,
                         },
-                        refresh_rate: 60000,
+                        refresh_rate_millihz: 60000,
                     },
                 ],
                 location: Location::Internal,
@@ -422,21 +422,21 @@ mod tests {
                             width: 1920,
                             height: 1080,
                         },
-                        refresh_rate: 60000,
+                        refresh_rate_millihz: 60000,
                     },
                     Mode {
                         resolution: Resolution {
                             width: 800,
                             height: 600,
                         },
-                        refresh_rate: 60000,
+                        refresh_rate_millihz: 60000,
                     },
                     Mode {
                         resolution: Resolution {
                             width: 640,
                             height: 480,
                         },
-                        refresh_rate: 60000,
+                        refresh_rate_millihz: 60000,
                     },
                 ],
                 location: Location::Internal,
@@ -451,14 +451,14 @@ mod tests {
                             width: 800,
                             height: 600,
                         },
-                        refresh_rate: 30000,
+                        refresh_rate_millihz: 30000,
                     },
                     Mode {
                         resolution: Resolution {
                             width: 640,
                             height: 480,
                         },
-                        refresh_rate: 60000,
+                        refresh_rate_millihz: 60000,
                     },
                 ],
                 location: Location::Internal,
@@ -491,7 +491,7 @@ mod tests {
                         width: 1920,
                         height: 1080,
                     },
-                    refresh_rate: 60000,
+                    refresh_rate_millihz: 60000,
                 }],
                 location: Location::Internal,
             },
@@ -504,7 +504,7 @@ mod tests {
                         width: 800,
                         height: 600,
                     },
-                    refresh_rate: 60000,
+                    refresh_rate_millihz: 60000,
                 }],
                 location: Location::Internal,
             },
@@ -537,6 +537,6 @@ mod tests {
             width: 1920,
             height: 1080,
         },
-        refresh_rate: 60000,
+        refresh_rate_millihz: 60000,
     };
 }

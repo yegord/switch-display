@@ -12,7 +12,7 @@ struct Args {
     #[arg(long, env = "SWITCH_DISPLAY_CONTROLLER")]
     controller: screen_controller::ScreenController,
     /// When choosing a resolution, choose one with at least this refresh rate.
-    /// The value is specified in microhertz, i.e. 60000 is 60 Hz.
+    /// The value is specified in millihertz, i.e. 60000 is 60 Hz.
     #[arg(long, env = "SWITCH_DISPLAY_MIN_REFRESH_RATE")]
     min_refresh_rate: Option<u32>,
 }

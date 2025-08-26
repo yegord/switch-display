@@ -56,7 +56,7 @@ impl Parser {
 
             modes.push(Mode {
                 resolution,
-                refresh_rate,
+                refresh_rate_millihz: refresh_rate,
             });
         }
     }
@@ -206,42 +206,42 @@ mod test {
                         width: 1920,
                         height: 1080
                     },
-                    refresh_rate: 60020,
+                    refresh_rate_millihz: 60020,
                 },
                 Mode {
                     resolution: Resolution {
                         width: 1920,
                         height: 1080
                     },
-                    refresh_rate: 60010,
+                    refresh_rate_millihz: 60010,
                 },
                 Mode {
                     resolution: Resolution {
                         width: 1920,
                         height: 1080
                     },
-                    refresh_rate: 59970,
+                    refresh_rate_millihz: 59970,
                 },
                 Mode {
                     resolution: Resolution {
                         width: 1920,
                         height: 1080
                     },
-                    refresh_rate: 59960,
+                    refresh_rate_millihz: 59960,
                 },
                 Mode {
                     resolution: Resolution {
                         width: 1920,
                         height: 1080
                     },
-                    refresh_rate: 59930,
+                    refresh_rate_millihz: 59930,
                 },
                 Mode {
                     resolution: Resolution {
                         width: 1920,
                         height: 1080
                     },
-                    refresh_rate: 48020,
+                    refresh_rate_millihz: 48020,
                 },
             ]
         );
@@ -265,14 +265,14 @@ mod test {
                         width: 1680,
                         height: 1050
                     },
-                    refresh_rate: 59950,
+                    refresh_rate_millihz: 59950,
                 },
                 Mode {
                     resolution: Resolution {
                         width: 1680,
                         height: 1050
                     },
-                    refresh_rate: 59880,
+                    refresh_rate_millihz: 59880,
                 },
             ]
         );
@@ -296,42 +296,42 @@ mod test {
                         width: 1920,
                         height: 1080
                     },
-                    refresh_rate: 60020,
+                    refresh_rate_millihz: 60020,
                 },
                 Mode {
                     resolution: Resolution {
                         width: 1920,
                         height: 1080
                     },
-                    refresh_rate: 60010,
+                    refresh_rate_millihz: 60010,
                 },
                 Mode {
                     resolution: Resolution {
                         width: 1920,
                         height: 1080
                     },
-                    refresh_rate: 59970,
+                    refresh_rate_millihz: 59970,
                 },
                 Mode {
                     resolution: Resolution {
                         width: 1920,
                         height: 1080
                     },
-                    refresh_rate: 59960,
+                    refresh_rate_millihz: 59960,
                 },
                 Mode {
                     resolution: Resolution {
                         width: 1920,
                         height: 1080
                     },
-                    refresh_rate: 59930,
+                    refresh_rate_millihz: 59930,
                 },
                 Mode {
                     resolution: Resolution {
                         width: 1920,
                         height: 1080
                     },
-                    refresh_rate: 48020,
+                    refresh_rate_millihz: 48020,
                 },
             ]
         );
@@ -354,14 +354,14 @@ mod test {
                         width: 1680,
                         height: 1050
                     },
-                    refresh_rate: 59950,
+                    refresh_rate_millihz: 59950,
                 },
                 Mode {
                     resolution: Resolution {
                         width: 1680,
                         height: 1050
                     },
-                    refresh_rate: 59880,
+                    refresh_rate_millihz: 59880,
                 },
             ]
         );

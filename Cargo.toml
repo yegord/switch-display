@@ -19,3 +19,6 @@ regex = { version = "1.11.1", default-features = false, features = ["unicode-per
 serde = { version = "1.0.219", optional = true, features = ["derive"] }
 serde_json = { version = "1.0.142", optional = true }
 x11rb = { version = "0.13.1", features = ["randr", "extra-traits"], optional = true }
+
+[dev-dependencies]
+maplit = "1.0.2"
