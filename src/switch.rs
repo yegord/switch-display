@@ -75,8 +75,9 @@ pub(super) fn choose_best_resolution(
                 .modes
                 .iter()
                 .filter(|mode| {
-                    min_refresh_rate
-                        .is_none_or(|min_refresh_rate| mode.refresh_rate_millihz >= min_refresh_rate)
+                    min_refresh_rate.is_none_or(|min_refresh_rate| {
+                        mode.refresh_rate_millihz >= min_refresh_rate
+                    })
                 })
                 .map(|mode| mode.resolution)
                 .collect::<HashSet<_>>()
