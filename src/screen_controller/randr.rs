@@ -4,7 +4,6 @@ use std::collections::HashMap;
 use std::iter::Iterator;
 use x11rb::CURRENT_TIME;
 use x11rb::connection::Connection;
-use x11rb::protocol::randr::GetOutputInfoReply;
 use x11rb::protocol::{randr, randr::ConnectionExt};
 use x11rb::rust_connection::RustConnection;
 
@@ -164,7 +163,7 @@ fn is_admissible(mode: &randr::ModeInfo) -> bool {
 fn randr_mode_to_mode(mode: &randr::ModeInfo) -> screen::Mode {
     screen::Mode {
         resolution: randr_mode_to_resolution(mode),
-        refresh_rate: compute_refresh_rate(mode),
+        refresh_rate_millihz: compute_refresh_rate(mode),
     }
 }
 
@@ -322,7 +321,7 @@ fn choose_best_mode<'a>(
         .map(|candidate| candidate.mode)
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 struct ScreenSize {
     width: u16,
     height: u16,
@@ -332,7 +331,7 @@ struct ScreenSize {
 
 fn compute_screen_size(
     crtc_configs: &HashMap<randr::Crtc, CrtcConfig>,
-    outputs: &HashMap<randr::Output, GetOutputInfoReply>,
+    outputs: &HashMap<randr::Output, randr::GetOutputInfoReply>,
 ) -> Option<ScreenSize> {
     let bboxes: Vec<_> = crtc_configs
         .values()
@@ -353,28 +352,18 @@ fn compute_screen_size(
     let max_x = bboxes.iter().map(|bbox| bbox.2).max();
     let max_y = bboxes.iter().map(|bbox| bbox.3).max();
 
-    let outputs: Vec<_> = crtc_configs
-        .values()
-        .flat_map(|crtc_config| crtc_config.outputs.iter())
-        .map(|output_id| outputs.get(output_id).expect("invalid output id"))
-        .collect();
-
-    let mm_width = outputs
-        .iter()
-        .map(|output| output.mm_width)
-        .filter(|&w| w > 0)
-        .max();
-    let mm_height = outputs
-        .iter()
-        .map(|output| output.mm_height)
-        .filter(|&h| h > 0)
-        .max();
-
     if let (Some(min_x), Some(min_y), Some(max_x), Some(max_y)) = (min_x, min_y, max_x, max_y) {
         let width = u16::try_from(max_x - min_x).expect("too large screen width");
         let height = u16::try_from(max_y - min_y).expect("too large screen height");
-        let mm_width = mm_width.unwrap_or_else(|| px_to_mm(width));
-        let mm_height = mm_height.unwrap_or_else(|| px_to_mm(height));
+
+        let (mm_width, mm_height) = crtc_configs
+            .values()
+            .flat_map(|crtc_config| crtc_config.outputs.iter())
+            .map(|output_id| outputs.get(output_id).expect("invalid output id"))
+            .map(|output| (output.mm_width, output.mm_height))
+            .filter(|(w, h)| *w != 0 && *h != 0)
+            .max_by_key(|(w, h)| *w as u64 * *h as u64)
+            .unwrap_or_else(|| (px_to_mm(width), px_to_mm(height)));
 
         Some(ScreenSize {
             width,
@@ -398,14 +387,140 @@ fn px_to_mm(px: u16) -> u32 {
 mod tests {
     use super::*;
 
+    use maplit::hashmap;
+
     #[test]
     #[ignore = "needs X11, manual"]
     fn get_outputs_smoke_test() {
+        // Arrange
+
+        // Act
         let screen = get_outputs();
-        println!("{:?}", screen);
+        log::trace!("screen = {screen:?}");
+
+        // Assert
         assert!(!screen.outputs.is_empty());
         for output in &screen.outputs {
             assert!(!output.connected || !output.modes.is_empty());
         }
+    }
+
+    #[test]
+    #[ignore = "needs X11, manual"]
+    fn switch_outputs_smoke_test() {
+        // Arrange
+        let switch_plan = SwitchPlan {
+            outputs_to_disable: Vec::new(),
+            outputs_to_enable: Vec::new(),
+        };
+
+        // Act
+        let screen = get_outputs();
+        switch_outputs(&switch_plan, None);
+        let new_screen = get_outputs();
+
+        // Assert
+        assert_eq!(screen, new_screen);
+    }
+
+    #[test]
+    fn when_no_crtcs_compute_screen_size_returns_none() {
+        // Arrange
+        let crtc_configs = HashMap::new();
+        let outputs = HashMap::new();
+
+        // Act
+        let size = compute_screen_size(&crtc_configs, &outputs);
+
+        // Assert
+        assert!(size.is_none());
+    }
+
+    #[test]
+    fn when_no_crtcs_enabled_compute_screen_size_returns_none() {
+        // Arrange
+        let crtc_configs = hashmap! {
+            1 => CrtcConfig { x: 0, y: 0, mode: None, rotation: randr::Rotation::ROTATE0, outputs: vec!{10} }
+        };
+        let outputs = hashmap! {
+            10 => randr::GetOutputInfoReply { ..Default::default() }
+        };
+
+        // Act
+        let size = compute_screen_size(&crtc_configs, &outputs);
+
+        // Assert
+        assert!(size.is_none());
+    }
+
+    #[test]
+    fn when_crtcs_enabled_compute_screen_size_returns_bbox_size_and_estimated_mm_size() {
+        // Arrange
+        let mode = randr::ModeInfo {
+            width: 640,
+            height: 480,
+            ..Default::default()
+        };
+        let crtc_configs = hashmap! {
+            1 => CrtcConfig { x: 0, y: 0, mode: Some(&mode), rotation: randr::Rotation::ROTATE0, outputs: vec!{10} },
+            2 => CrtcConfig { x: -10, y: 10, mode: Some(&mode), rotation: randr::Rotation::ROTATE0, outputs: vec!{20} },
+        };
+        let outputs = hashmap! {
+            10 => randr::GetOutputInfoReply { ..Default::default() },
+            20 => randr::GetOutputInfoReply { ..Default::default() },
+        };
+
+        // Act
+        let size = compute_screen_size(&crtc_configs, &outputs);
+
+        // Assert
+        assert_eq!(
+            size,
+            Some(ScreenSize {
+                width: 650,
+                height: 490,
+                mm_width: px_to_mm(650),
+                mm_height: px_to_mm(490)
+            })
+        );
+    }
+
+    #[test]
+    fn when_crtcs_enabled_and_mm_sizes_known_compute_screen_size_returns_bbox_size_and_max_mm_sizes()
+     {
+        // Arrange
+        let mode = randr::ModeInfo {
+            width: 640,
+            height: 480,
+            ..Default::default()
+        };
+        let crtc_configs = hashmap! {
+            1 => CrtcConfig { x: 0, y: 0, mode: Some(&mode), rotation: randr::Rotation::ROTATE0, outputs: vec!{10} },
+            2 => CrtcConfig { x: 0, y: 0, mode: Some(&mode), rotation: randr::Rotation::ROTATE0, outputs: vec!{20} },
+        };
+        let outputs = hashmap! {
+            10 => randr::GetOutputInfoReply { mm_width: 100, mm_height: 400, ..Default::default() },
+            20 => randr::GetOutputInfoReply { mm_width: 200, mm_height: 300, ..Default::default() },
+        };
+
+        // Act
+        let size = compute_screen_size(&crtc_configs, &outputs);
+
+        // Assert
+        assert_eq!(
+            size,
+            Some(ScreenSize {
+                width: 640,
+                height: 480,
+                mm_width: 200,
+                mm_height: 300,
+            })
+        );
+    }
+
+    #[test]
+    fn px_to_mm_test() {
+        assert_eq!(px_to_mm(0), 0);
+        assert_eq!(px_to_mm(u16::MAX), 17339);
     }
 }
