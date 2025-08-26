@@ -8,10 +8,10 @@ use clap::Parser;
 #[derive(Parser)]
 #[command(author, version, about, arg_required_else_help(true))]
 struct Args {
-    /// Method to use for querying and setting output resolutions.
+    /// Method to use for querying and setting output modes.
     #[arg(long, env = "SWITCH_DISPLAY_CONTROLLER")]
     controller: screen_controller::ScreenControllerType,
-    /// When choosing a resolution, choose one with at least this refresh rate.
+    /// When choosing a mode, choose one with at least this refresh rate.
     /// The value is specified in millihertz, i.e. 60000 is 60 Hz.
     #[arg(long, env = "SWITCH_DISPLAY_MIN_REFRESH_RATE")]
     min_refresh_rate: Option<u32>,
