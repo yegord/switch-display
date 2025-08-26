@@ -4,131 +4,147 @@ use std::collections::HashMap;
 use std::iter::Iterator;
 use x11rb::CURRENT_TIME;
 use x11rb::connection::Connection;
+use x11rb::protocol::xproto::Timestamp;
 use x11rb::protocol::{randr, randr::ConnectionExt};
 use x11rb::rust_connection::RustConnection;
 
-pub(super) fn get_outputs() -> screen::Screen {
-    let (conn, screen_num) =
-        RustConnection::connect(None).expect("unable to connect to X11 display");
-    let screen = &conn.setup().roots[screen_num];
+pub(super) struct RandrClient {
+    conn: RustConnection,
+    screen_num: usize,
+    config_timestamp: Timestamp,
+    modes: HashMap<randr::Mode, randr::ModeInfo>,
+    outputs: HashMap<randr::Output, randr::GetOutputInfoReply>,
+    crtcs: HashMap<randr::Crtc, randr::GetCrtcInfoReply>,
+}
 
-    let screen_resources = conn
-        .randr_get_screen_resources(screen.root)
-        .expect("randr_get_screen_resources call failed")
-        .reply()
-        .expect("randr_get_screen_resources returned an error");
+impl RandrClient {
+    pub(super) fn new() -> Self {
+        let (conn, screen_num) =
+            RustConnection::connect(None).expect("unable to connect to X11 display");
 
-    log::trace!("screen_resources = {screen_resources:?}");
+        let screen = &conn.setup().roots[screen_num];
 
-    let modes: HashMap<_, _> = screen_resources
-        .modes
-        .iter()
-        .map(|mode| (mode.id, mode))
-        .collect();
+        let screen_resources = conn
+            .randr_get_screen_resources(screen.root)
+            .expect("randr_get_screen_resources call failed")
+            .reply()
+            .expect("randr_get_screen_resources returned an error");
 
-    let outputs = screen_resources
-        .outputs
-        .iter()
-        .map(|&output_id| {
-            conn.randr_get_output_info(output_id, screen_resources.config_timestamp)
-                .expect("randr_get_output_info call failed")
+        log::trace!("screen_resources = {screen_resources:?}");
+
+        let modes: HashMap<_, _> = screen_resources
+            .modes
+            .into_iter()
+            .map(|mode| (mode.id, mode))
+            .collect();
+
+        let outputs: HashMap<_, _> = screen_resources
+            .outputs
+            .iter()
+            .copied()
+            .map(|output_id| {
+                (
+                    output_id,
+                    conn.randr_get_output_info(output_id, screen_resources.config_timestamp)
+                        .expect("randr_get_output_info call failed")
+                        .reply()
+                        .expect("randr_get_output_info returned an error"),
+                )
+            })
+            .inspect(|(output_id, output)| log::trace!("outputs[{output_id}] = {output:?}"))
+            .collect();
+
+        let crtcs: HashMap<_, _> = screen_resources
+            .crtcs
+            .iter()
+            .copied()
+            .map(|crtc_id| {
+                (
+                    crtc_id,
+                    conn.randr_get_crtc_info(crtc_id, screen_resources.config_timestamp)
+                        .expect("randr_get_crtc_info call failed")
+                        .reply()
+                        .expect("randr_get_crtc_info returned an error"),
+                )
+            })
+            .collect();
+
+        Self {
+            conn,
+            screen_num,
+            config_timestamp: screen_resources.config_timestamp,
+            modes,
+            outputs,
+            crtcs,
+        }
+    }
+
+    pub(super) fn get_outputs(&self) -> screen::Screen {
+        let outputs = self
+            .outputs
+            .values()
+            .map(|output| randr_output_to_output(output, &self.modes))
+            .collect();
+
+        screen::Screen { outputs }
+    }
+
+    pub(super) fn switch_outputs(
+        &mut self,
+        switch_plan: &SwitchPlan,
+        resolution: Option<screen::Resolution>,
+    ) {
+        update_crtcs(
+            switch_plan,
+            resolution,
+            &self.modes,
+            &mut self.outputs,
+            &mut self.crtcs,
+        );
+
+        let screen = &self.conn.setup().roots[self.screen_num];
+
+        for (&crtc_id, crtc_config) in &self.crtcs {
+            log::trace!("crtc_id = {crtc_id} crtc_config = {crtc_config:?}");
+            self.conn
+                .randr_set_crtc_config(
+                    crtc_id,
+                    CURRENT_TIME,
+                    self.config_timestamp,
+                    crtc_config.x,
+                    crtc_config.y,
+                    crtc_config.mode,
+                    crtc_config.rotation,
+                    &crtc_config.outputs,
+                )
+                .expect("randr_set_crtc_config call failed")
                 .reply()
-                .expect("randr_get_output_info returned an error")
-        })
-        .inspect(|output| log::trace!("output = {output:?}"))
-        .map(|output| randr_output_into_output(output, &modes))
-        .collect();
+                .expect("randr_set_crtc_config returned an error");
+        }
 
-    screen::Screen { outputs }
-}
-
-pub(super) fn switch_outputs(switch_plan: &SwitchPlan, resolution: Option<screen::Resolution>) {
-    let (conn, screen_num) =
-        RustConnection::connect(None).expect("unable to connect to X11 display");
-    let screen = &conn.setup().roots[screen_num];
-
-    let screen_resources = conn
-        .randr_get_screen_resources(screen.root)
-        .expect("randr_get_screen_resources call failed")
-        .reply()
-        .expect("randr_get_screen_resources returned an error");
-
-    let modes: HashMap<_, _> = screen_resources
-        .modes
-        .iter()
-        .map(|mode| (mode.id, mode))
-        .collect();
-
-    let outputs: HashMap<_, _> = screen_resources
-        .outputs
-        .iter()
-        .copied()
-        .map(|output_id| {
-            (
-                output_id,
-                conn.randr_get_output_info(output_id, screen_resources.config_timestamp)
-                    .expect("randr_get_output_info call failed")
-                    .reply()
-                    .expect("randr_get_output_info returned an error"),
-            )
-        })
-        .collect();
-
-    let mut crtcs: HashMap<_, _> = screen_resources
-        .crtcs
-        .iter()
-        .copied()
-        .map(|crtc_id| {
-            (
-                crtc_id,
-                conn.randr_get_crtc_info(crtc_id, screen_resources.config_timestamp)
-                    .expect("randr_get_crtc_info call failed")
-                    .reply()
-                    .expect("randr_get_crtc_info returned an error"),
-            )
-        })
-        .collect();
-
-    update_crtcs(switch_plan, resolution, &modes, &outputs, &mut crtcs);
-
-    for (&crtc_id, crtc_config) in &crtcs {
-        log::trace!("crtc_id = {crtc_id} crtc_config = {crtc_config:?}");
-        conn.randr_set_crtc_config(
-            crtc_id,
-            CURRENT_TIME,
-            screen_resources.config_timestamp,
-            crtc_config.x,
-            crtc_config.y,
-            crtc_config.mode,
-            crtc_config.rotation,
-            &crtc_config.outputs,
-        )
-        .expect("randr_set_crtc_config call failed")
-        .reply()
-        .expect("randr_set_crtc_config returned an error");
-    }
-
-    if let Some(screen_size) = compute_screen_size(&modes, &outputs, &crtcs) {
-        log::trace!("screen_size = {screen_size:?}");
-        conn.randr_set_screen_size(
-            screen.root,
-            screen_size.width,
-            screen_size.height,
-            screen_size.mm_width,
-            screen_size.mm_height,
-        )
-        .expect("randr_set_screen_size call failed")
-        .check()
-        .expect("randr_set_screen_size returned an error");
+        if let Some(screen_size) = compute_screen_size(&self.modes, &self.outputs, &self.crtcs) {
+            log::trace!("screen_size = {screen_size:?}");
+            self.conn
+                .randr_set_screen_size(
+                    screen.root,
+                    screen_size.width,
+                    screen_size.height,
+                    screen_size.mm_width,
+                    screen_size.mm_height,
+                )
+                .expect("randr_set_screen_size call failed")
+                .check()
+                .expect("randr_set_screen_size returned an error");
+        }
     }
 }
 
-fn randr_output_into_output(
-    output: randr::GetOutputInfoReply,
-    modes: &HashMap<randr::Mode, &randr::ModeInfo>,
+fn randr_output_to_output(
+    output: &randr::GetOutputInfoReply,
+    modes: &HashMap<randr::Mode, randr::ModeInfo>,
 ) -> screen::Output {
-    let name =
-        String::from_utf8(output.name).expect("output name should normally be a valid UTF-8");
+    let name = String::from_utf8(output.name.clone())
+        .expect("output name should normally be a valid UTF-8");
     let connected = output.connection == randr::Connection::CONNECTED;
     let enabled = output.crtc != 0;
     let location = screen::Location::from_output_name(&name);
@@ -149,11 +165,11 @@ fn randr_output_into_output(
 
 fn mode_ids_to_modes<'a>(
     mode_ids: &[randr::Mode],
-    modes: &HashMap<randr::Mode, &'a randr::ModeInfo>,
+    modes: &'a HashMap<randr::Mode, randr::ModeInfo>,
 ) -> impl Iterator<Item = &'a randr::ModeInfo> {
     mode_ids
         .iter()
-        .map(|mode_id| modes.get(mode_id).copied().expect("invalid mode id"))
+        .map(|mode_id| modes.get(mode_id).expect("invalid mode id"))
 }
 
 fn is_admissible(mode: &randr::ModeInfo) -> bool {
@@ -186,11 +202,11 @@ fn compute_refresh_rate(mode: &randr::ModeInfo) -> u32 {
 fn update_crtcs(
     switch_plan: &SwitchPlan,
     resolution: Option<screen::Resolution>,
-    modes: &HashMap<u32, &randr::ModeInfo>,
-    outputs: &HashMap<randr::Output, randr::GetOutputInfoReply>,
+    modes: &HashMap<u32, randr::ModeInfo>,
+    outputs: &mut HashMap<randr::Output, randr::GetOutputInfoReply>,
     crtcs: &mut HashMap<randr::Crtc, randr::GetCrtcInfoReply>,
 ) {
-    let outputs_to_disable = outputs.iter().filter(|(_, output)| {
+    let outputs_to_disable = outputs.iter_mut().filter(|(_, output)| {
         switch_plan
             .outputs_to_disable
             .iter()
@@ -205,9 +221,10 @@ fn update_crtcs(
         if crtc.outputs.is_empty() {
             crtc.mode = 0;
         }
+        output.crtc = 0;
     }
 
-    let outputs_to_enable = outputs.iter().filter(|(_, output)| {
+    let outputs_to_enable = outputs.iter_mut().filter(|(_, output)| {
         switch_plan
             .outputs_to_enable
             .iter()
@@ -236,6 +253,7 @@ fn update_crtcs(
             let crtc = crtcs.get_mut(&crtc_id).expect("invalid crtc id");
             assert!(!crtc.outputs.contains(output_id));
             crtc.outputs.push(*output_id);
+            output.crtc = crtc_id;
             crtc
         };
 
@@ -248,7 +266,7 @@ fn update_crtcs(
 
 fn choose_best_mode(
     output: &randr::GetOutputInfoReply,
-    modes: &HashMap<randr::Mode, &randr::ModeInfo>,
+    modes: &HashMap<randr::Mode, randr::ModeInfo>,
     resolution: Option<screen::Resolution>,
 ) -> Option<randr::Mode> {
     struct Candidate<'a> {
@@ -296,7 +314,7 @@ struct ScreenSize {
 }
 
 fn compute_screen_size(
-    modes: &HashMap<randr::Mode, &randr::ModeInfo>,
+    modes: &HashMap<randr::Mode, randr::ModeInfo>,
     outputs: &HashMap<randr::Output, randr::GetOutputInfoReply>,
     crtcs: &HashMap<randr::Crtc, randr::GetCrtcInfoReply>,
 ) -> Option<ScreenSize> {
@@ -304,7 +322,7 @@ fn compute_screen_size(
         .values()
         .filter(|crtc| crtc.mode != 0)
         .map(|crtc| {
-            let mode = *modes.get(&crtc.mode).expect("invalid mode id");
+            let mode = modes.get(&crtc.mode).expect("invalid mode id");
             (
                 crtc.x as i32,
                 crtc.y as i32,
@@ -360,9 +378,10 @@ mod tests {
     #[ignore = "needs X11, manual"]
     fn get_outputs_smoke_test() {
         // Arrange
+        let client = RandrClient::new();
 
         // Act
-        let screen = get_outputs();
+        let screen = client.get_outputs();
         log::trace!("screen = {screen:?}");
 
         // Assert
@@ -376,15 +395,16 @@ mod tests {
     #[ignore = "needs X11, manual"]
     fn switch_outputs_smoke_test() {
         // Arrange
+        let mut client = RandrClient::new();
         let switch_plan = SwitchPlan {
             outputs_to_disable: Vec::new(),
             outputs_to_enable: Vec::new(),
         };
 
         // Act
-        let screen = get_outputs();
-        switch_outputs(&switch_plan, None);
-        let new_screen = get_outputs();
+        let screen = client.get_outputs();
+        client.switch_outputs(&switch_plan, None);
+        let new_screen = client.get_outputs();
 
         // Assert
         assert_eq!(screen, new_screen);
@@ -425,13 +445,12 @@ mod tests {
     #[test]
     fn when_crtcs_enabled_compute_screen_size_returns_bbox_size_and_estimated_mm_size() {
         // Arrange
-        let mode = randr::ModeInfo {
-            width: 640,
-            height: 480,
-            ..Default::default()
-        };
         let modes = hashmap! {
-            1 => &mode
+            1 => randr::ModeInfo {
+                width: 640,
+                height: 480,
+                ..Default::default()
+            }
         };
         let outputs = hashmap! {
             10 => randr::GetOutputInfoReply { ..Default::default() },
@@ -461,13 +480,12 @@ mod tests {
     fn when_crtcs_enabled_and_mm_sizes_known_compute_screen_size_returns_bbox_size_and_max_mm_size()
     {
         // Arrange
-        let mode = randr::ModeInfo {
-            width: 640,
-            height: 480,
-            ..Default::default()
-        };
         let modes = hashmap! {
-            1 => &mode
+            1 => randr::ModeInfo {
+                width: 640,
+                height: 480,
+                ..Default::default()
+            }
         };
         let outputs = hashmap! {
             10 => randr::GetOutputInfoReply { mm_width: 100, mm_height: 400, ..Default::default() },

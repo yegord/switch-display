@@ -1,16 +1,16 @@
+#[cfg(feature = "randr")]
+mod randr;
 #[cfg(feature = "sway")]
 mod sway;
 mod utils;
 #[cfg(feature = "xrandr")]
 mod xrandr;
-#[cfg(feature = "randr")]
-mod randr;
 
 use crate::screen::{Resolution, Screen};
 use crate::switch::SwitchPlan;
 
 #[derive(Copy, Clone, Debug, clap::ValueEnum)]
-pub(super) enum ScreenController {
+pub(super) enum ScreenControllerType {
     #[cfg(feature = "xrandr")]
     Xrandr,
     #[cfg(feature = "sway")]
@@ -19,26 +19,50 @@ pub(super) enum ScreenController {
     Randr,
 }
 
+enum ScreenControllerData {
+    #[cfg(feature = "xrandr")]
+    Xrandr,
+    #[cfg(feature = "sway")]
+    Sway,
+    #[cfg(feature = "randr")]
+    Randr(randr::RandrClient),
+}
+
+pub(super) struct ScreenController(ScreenControllerData);
+
 impl ScreenController {
-    pub(super) fn get_outputs(&self) -> Screen {
-        match *self {
+    pub(super) fn new(controller_type: ScreenControllerType) -> Self {
+        Self(match controller_type {
             #[cfg(feature = "xrandr")]
-            ScreenController::Xrandr => xrandr::get_outputs(),
+            ScreenControllerType::Xrandr => ScreenControllerData::Xrandr,
             #[cfg(feature = "sway")]
-            ScreenController::Sway => sway::get_outputs(),
+            ScreenControllerType::Sway => ScreenControllerData::Sway,
             #[cfg(feature = "randr")]
-            ScreenController::Randr => randr::get_outputs(),
+            ScreenControllerType::Randr => ScreenControllerData::Randr(randr::RandrClient::new()),
+        })
+    }
+
+    pub(super) fn get_outputs(&self) -> Screen {
+        match &self.0 {
+            #[cfg(feature = "xrandr")]
+            ScreenControllerData::Xrandr => xrandr::get_outputs(),
+            #[cfg(feature = "sway")]
+            ScreenControllerData::Sway => sway::get_outputs(),
+            #[cfg(feature = "randr")]
+            ScreenControllerData::Randr(randr_client) => randr_client.get_outputs(),
         }
     }
 
-    pub(super) fn switch_outputs(&self, switch_plan: &SwitchPlan, resolution: Option<Resolution>) {
-        match *self {
+    pub(super) fn switch_outputs(&mut self, switch_plan: &SwitchPlan, resolution: Option<Resolution>) {
+        match &mut self.0 {
             #[cfg(feature = "xrandr")]
-            ScreenController::Xrandr => xrandr::switch_outputs(switch_plan, resolution),
+            ScreenControllerData::Xrandr => xrandr::switch_outputs(switch_plan, resolution),
             #[cfg(feature = "sway")]
-            ScreenController::Sway => sway::switch_outputs(switch_plan, resolution),
+            ScreenControllerData::Sway => sway::switch_outputs(switch_plan, resolution),
             #[cfg(feature = "randr")]
-            ScreenController::Randr => randr::switch_outputs(switch_plan, resolution),
+            ScreenControllerData::Randr(randr_client) => {
+                randr_client.switch_outputs(switch_plan, resolution)
+            }
         }
     }
 }

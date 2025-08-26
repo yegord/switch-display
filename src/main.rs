@@ -10,7 +10,7 @@ use clap::Parser;
 struct Args {
     /// Method to use for querying and setting output resolutions.
     #[arg(long, env = "SWITCH_DISPLAY_CONTROLLER")]
-    controller: screen_controller::ScreenController,
+    controller: screen_controller::ScreenControllerType,
     /// When choosing a resolution, choose one with at least this refresh rate.
     /// The value is specified in millihertz, i.e. 60000 is 60 Hz.
     #[arg(long, env = "SWITCH_DISPLAY_MIN_REFRESH_RATE")]
@@ -21,8 +21,9 @@ fn main() {
     env_logger::init();
 
     let args = Args::parse();
+    let mut screen_controller = screen_controller::ScreenController::new(args.controller);
 
-    let screen = args.controller.get_outputs();
+    let screen = screen_controller.get_outputs();
     log::trace!("screen = {screen:?}");
 
     let switch_plan = switch::build_switch_plan(&screen);
@@ -49,6 +50,5 @@ fn main() {
         switch::choose_best_resolution(&switch_plan.outputs_to_enable, args.min_refresh_rate);
     log::debug!("best_resolution = {best_resolution:?}");
 
-    args.controller
-        .switch_outputs(&switch_plan, best_resolution)
+    screen_controller.switch_outputs(&switch_plan, best_resolution)
 }
