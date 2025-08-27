@@ -645,6 +645,14 @@ mod tests {
                 name: b"HDMI-3".to_vec(),
                 ..Default::default()
             },
+            14 => randr::GetOutputInfoReply {
+                crtc: 22,
+                connection: randr::Connection::CONNECTED,
+                crtcs: vec![20, 21, 22],
+                modes: vec![1],
+                name: b"HDMI-4".to_vec(),
+                ..Default::default()
+            },
         };
 
         let mut crtcs = hashmap! {
@@ -659,6 +667,11 @@ mod tests {
                 mode: 1,
                 rotation: randr::Rotation::ROTATE90,
                 outputs: vec![13],
+                ..Default::default()
+            },
+            22 => randr::GetCrtcInfoReply {
+                mode: 1,
+                outputs: vec![14],
                 ..Default::default()
             },
         };
@@ -689,6 +702,7 @@ mod tests {
         assert_eq!(randr_outputs.get(&11).unwrap().crtc, 0);
         assert_eq!(randr_outputs.get(&12).unwrap().crtc, 20);
         assert_eq!(randr_outputs.get(&13).unwrap().crtc, 21);
+        assert_eq!(randr_outputs.get(&14).unwrap().crtc, 22);
 
         let crtc1 = crtcs.get(&20).unwrap();
         assert_eq!(crtc1.outputs.as_slice(), [12]);
@@ -840,13 +854,14 @@ mod tests {
     fn when_resolution_provided_choose_best_mode_prefers_preferred_mode() {
         // Arrange
         let output = randr::GetOutputInfoReply {
-            modes: vec![1, 2],
+            modes: vec![1, 2, 3],
             num_preferred: 1,
             ..Default::default()
         };
         let modes = hashmap!(
             1 => randr::ModeInfo{id: 1, width: 640, height: 480, dot_clock: 1, htotal: 1, vtotal: 1, ..Default::default()},
             2 => randr::ModeInfo{id: 2, width: 640, height: 480, dot_clock: 2, htotal: 1, vtotal: 1, ..Default::default()},
+            3 => randr::ModeInfo{id: 3, width: 800, height: 600, dot_clock: 3, htotal: 1, vtotal: 1, ..Default::default()},
         );
         let resolution = Some(screen::Resolution {
             width: 640,
@@ -927,7 +942,7 @@ mod tests {
         };
         let outputs = hashmap! {
             10 => randr::GetOutputInfoReply { ..Default::default() },
-            11 => randr::GetOutputInfoReply { ..Default::default() },
+            11 => randr::GetOutputInfoReply { mm_width: 0, mm_height: 1, ..Default::default() },
         };
         let crtcs = hashmap! {
             20 => randr::GetCrtcInfoReply { x: 0, y: 0, mode: 1, outputs: vec!{10}, ..Default::default() },
@@ -961,12 +976,12 @@ mod tests {
             }
         };
         let outputs = hashmap! {
-            10 => randr::GetOutputInfoReply { mm_width: 100, mm_height: 400, ..Default::default() },
-            11 => randr::GetOutputInfoReply { mm_width: 200, mm_height: 300, ..Default::default() },
+            10 => randr::GetOutputInfoReply { mm_width: 400, mm_height: 100, ..Default::default() },
+            11 => randr::GetOutputInfoReply { mm_width: 220, mm_height: 220, ..Default::default() },
         };
         let crtcs = hashmap! {
             20 => randr::GetCrtcInfoReply { x: 0, y: 0, mode: 1, outputs: vec!{10}, ..Default::default() },
-            21 => randr::GetCrtcInfoReply { x: 0, y: 0, mode: 1, outputs: vec!{11}, ..Default::default() },
+            21 => randr::GetCrtcInfoReply { x: 10, y: -10, mode: 1, outputs: vec!{11}, ..Default::default() },
         };
 
         // Act
@@ -976,10 +991,10 @@ mod tests {
         assert_eq!(
             size,
             Some(ScreenSize {
-                width: 640,
-                height: 480,
-                mm_width: 200,
-                mm_height: 300,
+                width: 650,
+                height: 490,
+                mm_width: 220,
+                mm_height: 220,
             })
         );
     }
