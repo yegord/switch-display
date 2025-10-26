@@ -305,8 +305,8 @@ fn choose_best_mode(
         .filter(|candidate| candidate.preferred || is_admissible(candidate.mode))
         .collect();
 
-    if let Some(resolution) = resolution {
-        if let Some(candidate) = candidates
+    if let Some(resolution) = resolution
+        && let Some(candidate) = candidates
             .iter()
             .filter(|candidate| randr_mode_to_resolution(candidate.mode) == resolution)
             .max_by_key(|candidate| {
@@ -315,9 +315,8 @@ fn choose_best_mode(
                     compute_refresh_rate_millihz(candidate.mode),
                 )
             })
-        {
-            return Some(candidate.mode.id);
-        }
+    {
+        return Some(candidate.mode.id);
     }
 
     candidates
